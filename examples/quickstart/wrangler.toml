@@ -5,4 +5,5 @@ compatibility_date = "2024-09-09"
 compatibility_flags = [ "nodejs_compat" ]
 
 # [vars]
-HONEYCOMB_API_KEY = "example"
+# SIGNOZ_ENDPOINT = "https://ingest.{region}.signoz.cloud:443/v1/traces"
+# SIGNOZ_ACCESS_TOKEN = "example"

@@ -21,7 +21,7 @@ describe('Durable Object SQL Storage Instrumentation', () => {
 		it('should instrument exec operation', async () => {
 			const mockStorage = {
 				sql: {
-					exec: vi.fn(async (query: string, bindings?: unknown[]) => ({
+					exec: vi.fn(async (_query: string, _bindings?: unknown[]) => ({
 						rowsRead: 10,
 						rowsWritten: 5,
 					})),
@@ -49,7 +49,7 @@ describe('Durable Object SQL Storage Instrumentation', () => {
 		it('should handle queries without bindings', async () => {
 			const mockStorage = {
 				sql: {
-					exec: vi.fn(async (query: string) => ({
+					exec: vi.fn(async (_query: string) => ({
 						rowsRead: 0,
 						rowsWritten: 1,
 					})),
@@ -88,7 +88,7 @@ describe('Durable Object SQL Storage Instrumentation', () => {
 		it('should instrument batch operations', async () => {
 			const mockStorage = {
 				sql: {
-					execBatch: vi.fn(async (statements: Array<{ query: string; bindings?: unknown[] }>) => [
+					execBatch: vi.fn(async (_statements: Array<{ query: string; bindings?: unknown[] }>) => [
 						{ rowsRead: 5, rowsWritten: 0 },
 						{ rowsRead: 0, rowsWritten: 2 },
 						{ rowsRead: 3, rowsWritten: 1 },
@@ -97,7 +97,7 @@ describe('Durable Object SQL Storage Instrumentation', () => {
 			} as any
 
 			const instrumented = instrumentStorage(mockStorage)
-			const results = await instrumented.sql.execBatch([
+			const results = await (instrumented.sql as any).execBatch([
 				{ query: 'SELECT * FROM users WHERE active = ?', bindings: [true] },
 				{ query: 'INSERT INTO logs (message) VALUES (?)', bindings: ['test'] },
 				{ query: 'UPDATE users SET last_login = ? WHERE id = ?', bindings: [Date.now(), 1] },
@@ -126,7 +126,7 @@ describe('Durable Object SQL Storage Instrumentation', () => {
 			} as any
 
 			const instrumented = instrumentStorage(mockStorage)
-			await instrumented.sql.execBatch([])
+			await (instrumented.sql as any).execBatch([])
 
 			const spans = exporter.getFinishedSpans()
 			expect(spans).toHaveLength(1)
@@ -145,7 +145,7 @@ describe('Durable Object SQL Storage Instrumentation', () => {
 			} as any
 
 			const instrumented = instrumentStorage(mockStorage)
-			await instrumented.sql.execBatch([{ query: 'QUERY 1' }, { query: 'QUERY 2' }, { query: 'QUERY 3' }])
+			await (instrumented.sql as any).execBatch([{ query: 'QUERY 1' }, { query: 'QUERY 2' }, { query: 'QUERY 3' }])
 
 			const spans = exporter.getFinishedSpans()
 			expect(spans).toHaveLength(1)
@@ -159,9 +159,9 @@ describe('Durable Object SQL Storage Instrumentation', () => {
 	describe('integration with KV storage', () => {
 		it('should instrument both KV and SQL operations', async () => {
 			const mockStorage = {
-				get: vi.fn(async (key: string) => 'value'),
+				get: vi.fn(async (_key: string) => 'value'),
 				sql: {
-					exec: vi.fn(async (query: string) => ({
+					exec: vi.fn(async (_query: string) => ({
 						rowsRead: 1,
 						rowsWritten: 0,
 					})),

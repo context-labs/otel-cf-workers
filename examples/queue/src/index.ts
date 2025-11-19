@@ -5,6 +5,7 @@ interface QueueData {
 }
 export interface Env {
 	QUEUE: Queue<QueueData>
+	SIGNOZ_ENDPOINT: string
 	API_KEY: string
 }
 
@@ -26,8 +27,8 @@ const handler: ExportedHandler<Env, QueueData> = {
 const config: ResolveConfigFn = (env: Env, trigger) => {
 	return {
 		exporter: {
-			url: 'https://api.honeycomb.io/v1/traces',
-			headers: { 'x-honeycomb-team': env.API_KEY },
+			url: env.SIGNOZ_ENDPOINT,
+			headers: { 'signoz-access-token': env.API_KEY },
 		},
 		service: {
 			name: 'greetings',

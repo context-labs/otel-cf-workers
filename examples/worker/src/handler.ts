@@ -4,7 +4,8 @@ import { withNextSpan } from '../../../src/index'
 export interface Env {
 	OTEL_TEST: KVNamespace
 	Test_Otel_DO: DurableObjectNamespace
-	'otel.exporter.headers.x-honeycomb-team': string
+	'otel.exporter.url': string
+	'otel.exporter.headers.signoz-access-token': string
 }
 
 const handleDO = async (request: Request, env: Env): Promise<Response> => {

@@ -1,1 +1,2 @@
-otel.headers.x-honeycomb-team=<honeycomb_api_key>
+otel.exporter.url=<signoz_endpoint>
+otel.exporter.headers.signoz-access-token=<signoz_access_token>

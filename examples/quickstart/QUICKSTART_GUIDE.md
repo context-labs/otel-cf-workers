@@ -2,14 +2,15 @@
 
 This is a very simple example of how to get started with the OpenTelemetry cf-worker package.
 
-It wraps your worker in an OpenTelemetry span and sends it to Honeycomb.
-You just need to provide your Honeycomb API key as a secret.
+It wraps your worker in an OpenTelemetry span and sends it to SigNoz.
+You just need to provide your SigNoz endpoint and access token as secrets.
 
 ## Installation
 
 ```bash
 npm install @inference-net/otel-cf-workers @opentelemetry/api
-npx wrangler secret put HONEYCOMB_API_KEY
+npx wrangler secret put SIGNOZ_ENDPOINT
+npx wrangler secret put SIGNOZ_ACCESS_TOKEN
 ```
 
 And set the Node Compatibility flag by adding `compatibility_flags = [ "nodejs_compat" ]`
@@ -22,7 +23,8 @@ import { instrument, ResolveConfigFn } from '@inference-net/otel-cf-workers'
 import { trace } from '@opentelemetry/api'
 
 export interface Env {
-	HONEYCOMB_API_KEY: string
+	SIGNOZ_ENDPOINT: string
+	SIGNOZ_ACCESS_TOKEN: string
 }
 
 const handler = {
@@ -50,8 +52,8 @@ const handler = {
 const config: ResolveConfigFn = (env: Env, _trigger: any) => {
 	return {
 		exporter: {
-			url: 'https://api.honeycomb.io/v1/traces',
-			headers: { 'x-honeycomb-team': env.HONEYCOMB_API_KEY },
+			url: env.SIGNOZ_ENDPOINT,
+			headers: { 'signoz-access-token': env.SIGNOZ_ACCESS_TOKEN },
 		},
 		service: { name: 'my-service-name' },
 	}

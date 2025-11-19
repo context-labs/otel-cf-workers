@@ -133,7 +133,7 @@ describe('R2 Instrumentation', () => {
 	describe('put', () => {
 		it('should instrument put operation', async () => {
 			const mockBucket = {
-				put: async (key: string, value: any) => ({
+				put: async (key: string, _value: any) => ({
 					key,
 					size: 500,
 					etag: 'ghi789',
@@ -186,7 +186,7 @@ describe('R2 Instrumentation', () => {
 	describe('delete', () => {
 		it('should instrument single key delete', async () => {
 			const mockBucket = {
-				delete: async (key: string | string[]) => {},
+				delete: async (_key: string | string[]) => {},
 			} as any
 
 			const instrumented = instrumentR2Bucket(mockBucket, 'TEST_BUCKET')
@@ -203,7 +203,7 @@ describe('R2 Instrumentation', () => {
 
 		it('should instrument multiple key delete', async () => {
 			const mockBucket = {
-				delete: async (keys: string | string[]) => {},
+				delete: async (_keys: string | string[]) => {},
 			} as any
 
 			const instrumented = instrumentR2Bucket(mockBucket, 'TEST_BUCKET')
@@ -221,7 +221,7 @@ describe('R2 Instrumentation', () => {
 	describe('list', () => {
 		it('should instrument list operation', async () => {
 			const mockBucket = {
-				list: async (options?: any) => ({
+				list: async (_options?: any) => ({
 					objects: [
 						{ key: 'obj1', size: 100, etag: 'a', version: 'v1', uploaded: new Date() },
 						{ key: 'obj2', size: 200, etag: 'b', version: 'v1', uploaded: new Date() },
@@ -245,7 +245,7 @@ describe('R2 Instrumentation', () => {
 
 		it('should capture list options', async () => {
 			const mockBucket = {
-				list: async (options?: any) => ({
+				list: async (_options?: any) => ({
 					objects: [],
 					truncated: true,
 					cursor: 'next-cursor',

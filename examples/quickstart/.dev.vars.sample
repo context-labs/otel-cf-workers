@@ -1,1 +1,2 @@
-HONEYCOMB_API_KEY=<honeycomb_api_key>
+SIGNOZ_ENDPOINT=<signoz_endpoint>
+SIGNOZ_ACCESS_TOKEN=<signoz_access_token>

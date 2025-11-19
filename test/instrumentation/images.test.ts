@@ -20,7 +20,7 @@ describe('Images Binding Instrumentation', () => {
 	describe('get', () => {
 		it('should instrument get operation', async () => {
 			const mockImages = {
-				get: async (key: string) => ({
+				get: async (_key: string) => ({
 					id: 'img-123',
 					filename: 'photo.jpg',
 					uploaded: '2024-01-01T00:00:00Z',
@@ -103,7 +103,7 @@ describe('Images Binding Instrumentation', () => {
 	describe('list', () => {
 		it('should instrument list operation', async () => {
 			const mockImages = {
-				list: async (options?: any) => ({
+				list: async (_options?: any) => ({
 					images: [
 						{ id: 'img-1', filename: 'photo1.jpg' },
 						{ id: 'img-2', filename: 'photo2.jpg' },
@@ -157,7 +157,7 @@ describe('Images Binding Instrumentation', () => {
 	describe('delete', () => {
 		it('should instrument delete operation', async () => {
 			const mockImages = {
-				delete: async (key: string) => {},
+				delete: async (_key: string) => {},
 			} as any
 
 			const instrumented = instrumentImagesBinding(mockImages, 'TEST_IMAGES')
@@ -184,7 +184,7 @@ describe('Images Binding Instrumentation', () => {
 			const instrumented = instrumentImagesBinding(mockImages, 'TEST_IMAGES')
 
 			// Call non-instrumented method
-			const result = await instrumented.customMethod()
+			const result = await (instrumented as any).customMethod()
 			expect(result).toBe('result')
 
 			// Only get operation should create span
@@ -202,7 +202,7 @@ describe('Images Binding Instrumentation', () => {
 			} as any
 
 			const instrumented = instrumentImagesBinding(mockImages, 'TEST_IMAGES')
-			expect(instrumented.someProp).toBe('value')
+			expect((instrumented as any).someProp).toBe('value')
 
 			const spans = exporter.getFinishedSpans()
 			expect(spans).toHaveLength(0)

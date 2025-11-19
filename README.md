@@ -1,308 +1,333 @@
 # otel-cf-workers
 
-An OpenTelemetry compatible library for instrumenting and exporting traces from Cloudflare Workers.
+OpenTelemetry instrumentation for Cloudflare Workers with automatic tracing for handlers, bindings, and distributed traces.
 
-## Getting started
+## Installation
 
 ```bash
-yarn add @inference-net/otel-cf-workers
+yarn add @inference-net/otel-cf-workers @opentelemetry/api
 ```
 
-> [!IMPORTANT]
-> To be able to use the Open Telemetry library you have to add the NodeJS compatibility flag in your `wrangler.toml` file.
+## Requirements
 
-```json
-compatibility_flags = [ "nodejs_compat" ]
+Add the `nodejs_compat` compatibility flag to your `wrangler.toml`:
+
+```toml
+compatibility_flags = ["nodejs_compat"]
 ```
 
-> [!IMPORTANT]
-> As of version 1.0.0-rc.52, we are no longer providing a CommonJS build. It is already hard enough trying to write a library that deals with all of Cloudflare's functionality over every single combination of compatibility flags and dates. Combining that with two different build is just too much. If you really need CommonJS support, please create a ticket (if there isn't already) and describe your use-case.
-
-For a simple setup example with configuration examples, have a look at the [Quickstart Example](https://github.com/evanderkoogh/otel-cf-workers/tree/main/examples/worker)
-
-### Code example
+## Quick Start
 
 ```typescript
 import { trace } from '@opentelemetry/api'
 import { instrument, ResolveConfigFn } from '@inference-net/otel-cf-workers'
 
 export interface Env {
-	HONEYCOMB_API_KEY: string
-	OTEL_TEST: KVNamespace
+	SIGNOZ_ENDPOINT: string
+	SIGNOZ_ACCESS_TOKEN: string
+	MY_KV: KVNamespace
+	MY_D1: D1Database
 }
 
 const handler = {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-		await fetch('https://cloudflare.com')
+		// Auto-instrumented: HTTP handler
+		await fetch('https://api.example.com') // Auto-instrumented: outbound fetch
 
-		const greeting = "G'day World"
-		trace.getActiveSpan()?.setAttribute('greeting', greeting)
-		ctx.waitUntil(fetch('https://workers.dev'))
-		return new Response(`${greeting}!`)
+		await env.MY_KV.get('key') // Auto-instrumented: KV operations
+		await env.MY_D1.prepare('SELECT * FROM users').all() // Auto-instrumented: D1 queries
+
+		// Manual instrumentation: add custom attributes
+		trace.getActiveSpan()?.setAttribute('user.id', '123')
+
+		return new Response('Hello World!')
 	},
 }
 
 const config: ResolveConfigFn = (env: Env, _trigger) => {
 	return {
 		exporter: {
-			url: 'https://api.honeycomb.io/v1/traces',
-			headers: { 'x-honeycomb-team': env.HONEYCOMB_API_KEY },
+			url: env.SIGNOZ_ENDPOINT,
+			headers: { 'signoz-access-token': env.SIGNOZ_ACCESS_TOKEN },
 		},
-		service: { name: 'greetings' },
+		service: { name: 'my-worker' },
 	}
 }
 
 export default instrument(handler, config)
 ```
 
-## Auto-instrumentation
-
-### Workers
-
-Wrapping your exporter handler with the `instrument` function is all you need to do to automatically have not just the functions of you handler auto-instrumented, but also the global `fetch` and `caches` and all of the supported bindings in your environment such as KV.
-
-See the quick start code sample for an example of how it works.
-
 ### Durable Objects
 
-Instrumenting Durable Objects work very similar to the regular Worker auto-instrumentation. Instead of wrapping the handler in an `instrument` call, you wrap the Durable Object class with the `instrumentDO` function.
-
 ```typescript
-import { instrumentDO, PartialTraceConfig } from '@inference-net/otel-cf-workers'
+import { instrumentDO, ResolveConfigFn } from '@inference-net/otel-cf-workers'
 
-const config: ResolveConfigFn = (env: Env, _trigger) => {
-	return {
-		exporter: {
-			url: 'https://api.honeycomb.io/v1/traces',
-			headers: { 'x-honeycomb-team': env.HONEYCOMB_API_KEY },
-		},
-		service: { name: 'greetings-do' },
-	}
-}
-
-class OtelDO implements DurableObject {
+class MyDurableObject implements DurableObject {
 	async fetch(request: Request): Promise<Response> {
-		return new Response('Hello World!')
+		// Auto-instrumented: DO fetch handler
+		await this.ctx.storage.get('key') // Auto-instrumented: DO storage
+		await this.ctx.storage.sql.exec('SELECT * FROM data') // Auto-instrumented: DO SQL
+		return new Response('Hello from DO!')
+	}
+
+	async alarm(): Promise<void> {
+		// Auto-instrumented: DO alarm handler
 	}
 }
 
-const TestOtelDO = instrumentDO(OtelDO, doConfig)
+const config: ResolveConfigFn = (env, _trigger) => ({
+	exporter: { url: env.OTEL_ENDPOINT },
+	service: { name: 'my-durable-object' },
+})
 
-export { TestOtelDO }
+export const MyDO = instrumentDO(MyDurableObject, config)
 ```
 
-## Creating custom spans
+## OpenTelemetry Features
 
-While auto-instrumenting should take care of a lot of the information that you would want to add, there will always be application specific information you want to send along.
+### ✅ Fully Supported
 
-You can get the current active span by doing:
+- **Distributed Tracing**: Automatic W3C Trace Context propagation across services
+- **Semantic Conventions**: Full support for OpenTelemetry semantic conventions (v1.28.0+)
+  - `db.query.text` - Database queries and keys
+  - `db.system.name` - Database system identification
+  - `db.operation.name` - Operation types
+  - `db.operation.batch.size` - Batch operation tracking
+  - `http.*` - HTTP request/response attributes
+  - `faas.*` - FaaS trigger and execution attributes
+- **Custom Spans**: Create manual spans with `trace.getTracer()`
+- **Span Attributes**: Set custom attributes on active spans
+- **Context Propagation**: Async context management across Workers runtime
+- **Sampling**: Both head and tail sampling strategies
+- **Exporters**: OTLP/HTTP (JSON) format
+- **Span Processors**: Custom trace-based batch processing
+
+### Cloudflare-Specific Attributes
+
+In addition to OpenTelemetry standard attributes, we capture Cloudflare-specific metadata:
+
+- `cloudflare.*` - Platform-specific attributes (ray ID, colo, script version)
+- `geo.*` - Request geolocation data
+- Response metadata (TTL, cache status, rows read/written)
+- Binding-specific attributes (KV keys, D1 query stats, R2 checksums)
+
+## Cloudflare Platform Support
+
+### Triggers & Handlers
+
+| Feature                         | Status | Notes                                              |
+| ------------------------------- | ------ | -------------------------------------------------- |
+| HTTP Handler (`fetch`)          | ✅     | Full support with geo, headers, user-agent parsing |
+| Scheduled Handler (`scheduled`) | ✅     | Cron trigger instrumentation                       |
+| Queue Consumer (`queue`)        | ✅     | Message batch processing with ack/retry tracking   |
+| Email Handler (`email`)         | ✅     | Incoming email processing                          |
+| Durable Object `fetch`          | ✅     | DO HTTP requests                                   |
+| Durable Object `alarm`          | ✅     | DO alarm triggers                                  |
+| `ctx.waitUntil`                 | ✅     | Background promise tracking                        |
+| Tail Handler (`tail`)           | ❌     | Not yet supported                                  |
+| DO Hibernated WebSocket         | ❌     | Not yet supported                                  |
+
+### Bindings
+
+| Binding               | Status | Operations Instrumented                                                                  |
+| --------------------- | ------ | ---------------------------------------------------------------------------------------- |
+| **KV Namespace**      | ✅     | `get`, `put`, `delete`, `list`, `getWithMetadata`                                        |
+| **R2 Bucket**         | ✅     | `head`, `get`, `put`, `delete`, `list`, `createMultipartUpload`, `resumeMultipartUpload` |
+| **D1 Database**       | ✅     | `prepare`, `exec`, `batch`, `all`, `run`, `first`, `raw`                                 |
+| **Durable Objects**   | ✅     | Stub `fetch` calls                                                                       |
+| **DO Storage (KV)**   | ✅     | `get`, `put`, `delete`, `list`, `getAlarm`, `setAlarm`, `deleteAlarm`                    |
+| **DO Storage (SQL)**  | ✅     | `exec`, `execBatch`                                                                      |
+| **Queue Producer**    | ✅     | `send`, `sendBatch`                                                                      |
+| **Service Bindings**  | ✅     | Worker-to-worker calls                                                                   |
+| **Analytics Engine**  | ✅     | `writeDataPoint`                                                                         |
+| **Images**            | ✅     | `get`, `list`, `delete`                                                                  |
+| **Rate Limiting**     | ✅     | `limit`                                                                                  |
+| **Workers AI**        | ❌     | Not yet supported                                                                        |
+| **Vectorize**         | ❌     | Not yet supported                                                                        |
+| **Hyperdrive**        | ❌     | Not yet supported                                                                        |
+| **Browser Rendering** | ❌     | Not yet supported                                                                        |
+| **Email Sending**     | ❌     | Not yet supported                                                                        |
+| **mTLS**              | ❌     | Not yet supported                                                                        |
+
+### Global APIs
+
+| API       | Status | Notes                                           |
+| --------- | ------ | ----------------------------------------------- |
+| `fetch()` | ✅     | Global fetch calls with trace context injection |
+| `caches`  | ✅     | Cache API operations                            |
+
+### Cloudflare Modules
+
+| Module               | Status |
+| -------------------- | ------ |
+| `cloudflare:email`   | ❌     |
+| `cloudflare:sockets` | ❌     |
+
+## Configuration
+
+### Basic Configuration
 
 ```typescript
-import {trace} from '@opentelemetry/api'
-
-const handler = {
-	async fetch(request: Request) {
-		const span = trace.getActiveSpan()
-		if(span) span.setAttributes('name', 'value')
-		....
-	}
-}
+const config: ResolveConfigFn = (env: Env, trigger) => ({
+	exporter: {
+		url: env.SIGNOZ_ENDPOINT,
+		headers: { 'signoz-access-token': env.SIGNOZ_ACCESS_TOKEN },
+	},
+	service: {
+		name: 'my-service',
+		version: '1.0.0', // Optional
+		namespace: 'production', // Optional
+	},
+})
 ```
 
-Or if you want to create a new span:
+### Sampling
+
+```typescript
+const config: ResolveConfigFn = (env, trigger) => ({
+	// ... exporter config
+	sampling: {
+		// Head sampling: sample 10% of requests at start
+		headSampler: {
+			ratio: 0.1,
+			acceptRemote: true, // Accept parent trace decisions
+		},
+		// Tail sampling: always keep errors even if not head-sampled
+		tailSampler: (trace) => {
+			const rootSpan = trace.localRootSpan
+			return (
+				rootSpan.status.code === SpanStatusCode.ERROR || (rootSpan.spanContext().traceFlags & TraceFlags.SAMPLED) !== 0
+			)
+		},
+	},
+})
+```
+
+### Trace Context Propagation
+
+```typescript
+const config: ResolveConfigFn = (env, trigger) => ({
+	// ... exporter config
+
+	// Control outbound trace context
+	fetch: {
+		includeTraceContext: (request) => {
+			// Only propagate to same-origin requests
+			return new URL(request.url).hostname === 'api.example.com'
+		},
+	},
+
+	// Control inbound trace context
+	handlers: {
+		fetch: {
+			acceptTraceContext: (request) => {
+				// Accept trace context from trusted origins
+				return request.headers.get('x-trusted') === 'true'
+			},
+		},
+	},
+})
+```
+
+### Post-Processing
+
+Redact sensitive data before export:
+
+```typescript
+const config: ResolveConfigFn = (env, trigger) => ({
+	// ... exporter config
+	postProcessor: (spans) => {
+		return spans.map((span) => {
+			// Redact URLs with tokens
+			if (span.attributes['http.url']) {
+				span.attributes['http.url'] = span.attributes['http.url'].replace(/token=[^&]+/, 'token=REDACTED')
+			}
+			// Remove sensitive headers
+			delete span.attributes['http.request.header.authorization']
+			return span
+		})
+	},
+})
+```
+
+### Custom Propagator
+
+```typescript
+const config: ResolveConfigFn = (env, trigger) => ({
+	// ... exporter config
+	propagator: new MyCustomPropagator(),
+})
+```
+
+## Manual Instrumentation
+
+### Adding Attributes
 
 ```typescript
 import { trace } from '@opentelemetry/api'
 
 const handler = {
-	async fetch(request: Request) {
-		const tracer = trace.getTracer('my_own_tracer_name')
-		return tracer.startActiveSpan('name', (span) => {
-			const response = await doSomethingAwesome
-			span.end()
-			return response
+	async fetch(request: Request, env: Env) {
+		const span = trace.getActiveSpan()
+		if (span) {
+			span.setAttribute('user.id', '123')
+			span.setAttribute('user.role', 'admin')
+		}
+		return new Response('OK')
+	},
+}
+```
+
+### Creating Custom Spans
+
+```typescript
+import { trace, SpanStatusCode } from '@opentelemetry/api'
+
+const handler = {
+	async fetch(request: Request, env: Env) {
+		const tracer = trace.getTracer('my-app')
+
+		return await tracer.startActiveSpan('process-request', async (span) => {
+			span.setAttribute('request.id', crypto.randomUUID())
+
+			try {
+				const result = await doWork()
+				span.setStatus({ code: SpanStatusCode.OK })
+				return new Response(result)
+			} catch (error) {
+				span.recordException(error)
+				span.setStatus({ code: SpanStatusCode.ERROR })
+				throw error
+			} finally {
+				span.end()
+			}
 		})
 	},
 }
 ```
 
-## Configuration
-
-For configuration you can either pass in a [TraceConfig](https://github.com/evanderkoogh/otel-cf-workers/blob/0da125a4e16ff13e49f8e486340eb6080e631eb9/src/types.ts#L24C18-L24C29) or a function that takes the Environment and the trigger for this particular trace and returns a `TraceConfig`.
-
-Because the configuration function is run separately for every new invocation, it is possible to tailor your configuration for every type of request. So it is for example possible to have a much lower sampling ratio for your healthchecks than actual API requests.
-
-### Exporter
-
-In the `exporter`, you need to configure where to send spans to. It can take either an instance of a class that implements the standard Open Telemetry `SpanExporter`interface, or an object with the properties `url` and optionally `headers` to configure an exporter for the Open Telemetry format.
-
-Examples:
-
-```typescript
-const exporter = new ConsoleSpanExporter()
-```
-
-```typescript
-const exporter = {
-	url: 'https://api.honeycomb.io/v1/traces',
-	headers: { 'x-honeycomb-team': env.HONEYCOMB_API_KEY },
-}
-```
-
-### Fetch
-
-`includeTraceContext` is used to specify if outgoing requests should include the TraceContext so that the other service can participate in a distributed trace.
-The default is `true` for all outgoing requests, but you can turn it off for all requests with `false`, or specify a method that takes the outgoing `Request` method and return a boolean on whether to include the tracing context.
-
-Example:
-
-```typescript
-const fetchConf = (request: Request): boolean => {
-	return new URL(request.url).hostname === 'example.com'
-}
-```
-
-### Handlers
-
-The `handlers` field of the configuration overrides the way in which event handlers, such as `fetch` or `queue`, are instrumented.
-
-#### Fetch Handler
-
-`acceptTraceContext` is used to specify if incoming requests handled by `fetch` should accept a TraceContext and participate in a distributed trace.
-The default is `true` for all incoming requests, but you can turn it off for all requests with `false` or specify a method that takes the incoming `Request` and returns a boolean indicating whether to accept the tracing context.
-
-Example:
-
-```typescript
-const fetchConf = (request: Request): boolean => {
-	return new URL(request.url).hostname === 'example.com'
-}
-```
-
-### PostProcessor
-
-The PostProcessor function is called just before exporting the spans and allows you to make any changes to the spans before sending this. For example to remove entire spans, or to remove or redact security or privacy sensitive data.
-
-Example:
-
-```typescript
-const postProcessor = (spans: ReadableSpan[]): ReadableSpan[] => {
-	spans[0].attributes['http.url'] = 'REDACTED'
-	return spans
-}
-```
-
-### Sampling
-
-One of the challenges of tracing is that for sites and applications with a lot of traffic it becomes prohibitively expensive to store every trace. So the question becomes how to store the ones with the most interesting information and drop the ones that are the least interesting. That is where sampling comes in.
-
-#### Head Sampling vs Tail Sampling
-
-There are two (complimentary) sampling strategies: Head Sampling and Tail Sampling and in a lot of cases you will want to use a combination to get the most information into the least amount of sampled events.
-
-To understand the difference in head vs tail sampling in our context, we have to understand distributed tracing. A distributed trace is one that spans multiple systems or services. At every point another service is called, we inject a header with the information about the trace, such as the traceId, the parentSpanId and a hint if this trace is sampled.
-
-Head Sampling, as the name implies, is done at the beginning of a span/trace. In our case it is mostly used to signal to downstream systems whether or not to sample a particular trace, because we can always drop the current services portion of a trace during Tail Sampling.
-
-Head Sampling can be configured with any standard Open Telemetry `Sampler` or an object with a `ratio` property and optional `acceptRemote` property. The default is the AlwaysOnSampler, which samples every single request.
-
-Examples:
-
-```typescript
-const headSampler = new AlwaysOnSampler()
-```
-
-```typescript
-const headSampler = {
-	acceptRemote: false //Whether to accept incoming trace contexts
-	ratio: 0.5 //number between 0 and 1 that represents the ratio of requests to sample. 0 is none and 1 is all requests.
-}
-```
-
-Tail Sampling on the other hand is done at the end. Because we record every single span, even if it isn't head sampled, it is possible to still sample the local part of a trace in say the event of an error.
-
-Example:
-
-```typescript
-const tailSampler = (traceInfo: LocalTrace): boolean => {
-	const localRootSpan = traceInfo.localRootSpan as unknown as ReadableSpan
-	return (localRootSpan.spanContext().traceFlags & TraceFlags.SAMPLED) === TraceFlags.SAMPLED
-}
-```
-
-The default is a tailSampler that samples traces that have been head sampled or if the local root span is marked as an error.
-
-#### Service
-
-Service identifies the service and version to help with querying.
-
-Example:
-
-```typescript
-const service = {
-	name: 'some_name' //required. The name of your service
-	version: '1.0.4' //optional: An opaque version string. Can be a semver or git hash for example
-	namespace: 'namespace' //optional: Useful to group multiple services together in one namespace.
-}
-```
-
-### Propagation
-
-Register a custom propagator with:
-
-```ts
-const config: ResolveConfigFn = (env: Env, _trigger) => {
-	return {
-		propagator: new MyCoolPropagator(),
-	}
-}
-```
-
-## Distributed Tracing
-
-One of the advantages of using Open Telemetry is that it makes it easier to do distributed tracing through multiple different services. This library will automatically inject the W3C Trace Context headers when making calls to Durable Objects or outbound fetch calls.
-
 ## Limitations
 
-- The worker runtime does not expose accurate timing information to protect against side-channel attacks such as Spectre and will only update the clock on IO, so any CPU heavy processing will look like it takes 0 milliseconds.
-- Not everything is auto-instrumented yet. See the lists below for what is and isn't.
+- **Timing Accuracy**: The Workers runtime does not expose accurate timing information to protect against Spectre attacks. CPU-bound work may show 0ms duration. The clock only updates on I/O operations.
+- **RPC-Style DO Calls**: Direct RPC method calls to Durable Objects (e.g., `await stub.myMethod()`) are not auto-instrumented. Use fetch-style calls (`await stub.fetch(request)`) for automatic tracing.
 
-Triggers:
+## Examples
 
-- [x] Email (`handler.email`)
-- [x] HTTP (`handler.fetch`)
-- [x] Queue (`handler.queue`)
-- [x] Cron (`handler.scheduled`)
-- [ ] Tail (`handler.tail`)
-- [x] Durable Objects fetch
-- [x] Durable Objects alarm
-- [ ] Durable Objects hibernated WebSocket
-- [x] waitUntil (`ctx.waitUntil`)
+See the [examples directory](./examples) for complete working examples:
 
-Globals/built-ins:
+- [Basic Worker](./examples/worker) - HTTP handler with KV and D1
+- [Quickstart Guide](./examples/quickstart/QUICKSTART_GUIDE.md) - Step-by-step tutorial
 
-- [x] Fetch
-- [x] Caches
-- [x] Durable Object Storage
+## Resources
 
-Cloudflare modules
+- [OpenTelemetry Documentation](https://opentelemetry.io/docs/)
+- [Cloudflare Workers Documentation](https://developers.cloudflare.com/workers/)
+- [Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/)
 
-- [ ] `cloudflare:email`
-- [ ] `cloudflare:sockets`
+## License
 
-Bindings:
+BSD-3-Clause
 
-- [x] KV
-- [x] Queue
-- [x] Durable Objects
-- [ ] R2
-- [x] D1
-- [x] Service Bindings
-- [x] Analytics Engine
-- [ ] Browser Rendering
-- [ ] Workers AI
-- [ ] Email Sending
-- [ ] mTLS
-- [ ] Vectorize
-- [ ] Hyperdrive
-- [ ] Workers for Platforms Dispatch
+## Contributing
+
+Contributions welcome! This is a fork maintained by [@context-labs](https://github.com/context-labs), originally from [evanderkoogh/otel-cf-workers](https://github.com/evanderkoogh/otel-cf-workers).

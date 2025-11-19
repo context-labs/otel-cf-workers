@@ -1,13 +1,13 @@
 import { instrument, instrumentDO, ResolveConfigFn } from '../../../src/index';
 import handler, { MyDurableObject as MyDO } from './handler';
 
-type WithSecretEnv = Env & { 'otel.exporter.headers.x-honeycomb-team': string };
+type WithSecretEnv = Env & { 'otel.exporter.url': string; 'otel.exporter.headers.signoz-access-token': string };
 
 const config: ResolveConfigFn = (env: WithSecretEnv, _trigger) => {
 	return {
 		exporter: {
-			url: 'https://api.honeycomb.io/v1/traces',
-			headers: { 'x-honeycomb-team': env['otel.exporter.headers.x-honeycomb-team'] },
+			url: env['otel.exporter.url'],
+			headers: { 'signoz-access-token': env['otel.exporter.headers.signoz-access-token'] },
 		},
 		service: {
 			name: 'new-style-greetings',
@@ -19,8 +19,8 @@ const config: ResolveConfigFn = (env: WithSecretEnv, _trigger) => {
 const doConfig: ResolveConfigFn = (env: WithSecretEnv) => {
 	return {
 		exporter: {
-			url: 'https://api.honeycomb.io/v1/traces',
-			headers: { 'x-honeycomb-team': env['otel.exporter.headers.x-honeycomb-team'] },
+			url: env['otel.exporter.url'],
+			headers: { 'signoz-access-token': env['otel.exporter.headers.signoz-access-token'] },
 		},
 		service: { name: 'new-style-greetings-do' },
 	};

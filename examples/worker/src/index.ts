@@ -4,8 +4,8 @@ import handler, { Env, OtelDO } from './handler'
 const config: ResolveConfigFn = (env: Env, _trigger) => {
 	return {
 		exporter: {
-			url: 'https://api.honeycomb.io/v1/traces',
-			headers: { 'x-honeycomb-team': env['otel.exporter.headers.x-honeycomb-team'] },
+			url: env['otel.exporter.url'],
+			headers: { 'signoz-access-token': env['otel.exporter.headers.signoz-access-token'] },
 		},
 		service: {
 			name: 'greetings',
@@ -17,8 +17,8 @@ const config: ResolveConfigFn = (env: Env, _trigger) => {
 const doConfig: ResolveConfigFn = (env: Env) => {
 	return {
 		exporter: {
-			url: 'https://api.honeycomb.io/v1/traces',
-			headers: { 'x-honeycomb-team': env['otel.exporter.headers.x-honeycomb-team'] },
+			url: env['otel.exporter.url'],
+			headers: { 'signoz-access-token': env['otel.exporter.headers.signoz-access-token'] },
 		},
 		service: { name: 'greetings-do' },
 	}

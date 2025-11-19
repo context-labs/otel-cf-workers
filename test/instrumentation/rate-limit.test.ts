@@ -20,7 +20,7 @@ describe('Rate Limiting Binding Instrumentation', () => {
 	describe('limit', () => {
 		it('should instrument successful limit check', async () => {
 			const mockRateLimit = {
-				limit: async (options: { key: string }) => ({
+				limit: async (_options: { key: string }) => ({
 					success: true,
 				}),
 			} as any
@@ -44,7 +44,7 @@ describe('Rate Limiting Binding Instrumentation', () => {
 
 		it('should instrument failed limit check', async () => {
 			const mockRateLimit = {
-				limit: async (options: { key: string }) => ({
+				limit: async (_options: { key: string }) => ({
 					success: false,
 				}),
 			} as any
@@ -65,7 +65,7 @@ describe('Rate Limiting Binding Instrumentation', () => {
 
 		it('should handle IP-based rate limiting', async () => {
 			const mockRateLimit = {
-				limit: async (options: { key: string }) => ({
+				limit: async (_options: { key: string }) => ({
 					success: true,
 				}),
 			} as any
@@ -80,7 +80,7 @@ describe('Rate Limiting Binding Instrumentation', () => {
 
 		it('should handle complex key patterns', async () => {
 			const mockRateLimit = {
-				limit: async (options: { key: string }) => ({
+				limit: async (_options: { key: string }) => ({
 					success: true,
 				}),
 			} as any
@@ -119,7 +119,7 @@ describe('Rate Limiting Binding Instrumentation', () => {
 			const instrumented = instrumentRateLimitBinding(mockRateLimit, 'TEST_RATE_LIMITER')
 
 			// Call non-instrumented method
-			const result = await instrumented.customMethod()
+			const result = await (instrumented as any).customMethod()
 			expect(result).toBe('result')
 
 			// Only limit operation should create span
@@ -137,7 +137,7 @@ describe('Rate Limiting Binding Instrumentation', () => {
 			} as any
 
 			const instrumented = instrumentRateLimitBinding(mockRateLimit, 'TEST_RATE_LIMITER')
-			expect(instrumented.someProp).toBe('value')
+			expect((instrumented as any).someProp).toBe('value')
 
 			const spans = exporter.getFinishedSpans()
 			expect(spans).toHaveLength(0)

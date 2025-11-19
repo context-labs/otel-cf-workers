@@ -2,7 +2,8 @@ import { instrument, ResolveConfigFn } from '@inference-net/otel-cf-workers'
 import { trace } from '@opentelemetry/api'
 
 export interface Env {
-	HONEYCOMB_API_KEY: string
+	SIGNOZ_ENDPOINT: string
+	SIGNOZ_ACCESS_TOKEN: string
 }
 
 const handler = {
@@ -30,8 +31,8 @@ const handler = {
 const config: ResolveConfigFn = (env: Env) => {
 	return {
 		exporter: {
-			url: 'https://api.honeycomb.io/v1/traces',
-			headers: { 'x-honeycomb-team': env.HONEYCOMB_API_KEY },
+			url: env.SIGNOZ_ENDPOINT,
+			headers: { 'signoz-access-token': env.SIGNOZ_ACCESS_TOKEN },
 		},
 		service: { name: 'my-service-name' },
 	}
