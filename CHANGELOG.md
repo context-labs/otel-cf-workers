@@ -1,5 +1,11 @@
 # @inference-net/otel-cf-workers
 
+## 2.0.0-alpha.1
+
+- 0000000: Forked and started upgrade work!
+
+# @microlabs/otel-cf-workers
+
 ## 1.0.0-rc.52
 
 ### Minor Changes
