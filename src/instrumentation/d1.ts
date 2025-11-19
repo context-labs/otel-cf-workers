@@ -1,6 +1,20 @@
 import { Attributes, SpanKind, SpanOptions, SpanStatusCode, Exception, trace } from '@opentelemetry/api'
 import { SemanticAttributes } from '@opentelemetry/semantic-conventions'
 import { wrap } from '../wrap.js'
+import {
+	ATTR_CLOUDFLARE_BINDING_TYPE,
+	ATTR_DB_SYSTEM_NAME,
+	ATTR_DB_OPERATION_NAME,
+	ATTR_DB_QUERY_TEXT,
+	ATTR_DB_OPERATION_BATCH_SIZE,
+	ATTR_CLOUDFLARE_D1_RESPONSE_SIZE_AFTER,
+	ATTR_CLOUDFLARE_D1_RESPONSE_ROWS_READ,
+	ATTR_CLOUDFLARE_D1_RESPONSE_ROWS_WRITTEN,
+	ATTR_CLOUDFLARE_D1_RESPONSE_SQL_DURATION_MS,
+	ATTR_CLOUDFLARE_D1_RESPONSE_LAST_ROW_ID,
+	ATTR_CLOUDFLARE_D1_RESPONSE_CHANGED_DB,
+	ATTR_CLOUDFLARE_D1_RESPONSE_CHANGES,
+} from '../constants.js'
 
 const dbSystem = 'Cloudflare D1'
 
@@ -13,24 +27,24 @@ interface D1StatementInternals {
 
 function metaAttributes(meta: D1Meta): Attributes {
 	return {
-		'db.cf.d1.rows_read': meta.rows_read,
-		'db.cf.d1.rows_written': meta.rows_written,
-		'db.cf.d1.duration': meta.duration,
-		'db.cf.d1.size_after': meta.size_after,
-		'db.cf.d1.last_row_id': meta.last_row_id,
-		'db.cf.d1.changed_db': meta.changed_db,
-		'db.cf.d1.changes': meta.changes,
+		[ATTR_CLOUDFLARE_D1_RESPONSE_ROWS_READ]: meta.rows_read,
+		[ATTR_CLOUDFLARE_D1_RESPONSE_ROWS_WRITTEN]: meta.rows_written,
+		[ATTR_CLOUDFLARE_D1_RESPONSE_SQL_DURATION_MS]: meta.duration,
+		[ATTR_CLOUDFLARE_D1_RESPONSE_SIZE_AFTER]: meta.size_after,
+		[ATTR_CLOUDFLARE_D1_RESPONSE_LAST_ROW_ID]: meta.last_row_id,
+		[ATTR_CLOUDFLARE_D1_RESPONSE_CHANGED_DB]: meta.changed_db,
+		[ATTR_CLOUDFLARE_D1_RESPONSE_CHANGES]: meta.changes,
 	}
 }
 function spanOptions(dbName: string, operation: string, sql?: string): SpanOptions {
 	const attributes: Attributes = {
-		binding_type: 'D1',
+		[ATTR_CLOUDFLARE_BINDING_TYPE]: 'D1',
 		[SemanticAttributes.DB_NAME]: dbName,
-		[SemanticAttributes.DB_SYSTEM]: dbSystem,
-		[SemanticAttributes.DB_OPERATION]: operation,
+		[ATTR_DB_SYSTEM_NAME]: dbSystem,
+		[ATTR_DB_OPERATION_NAME]: operation,
 	}
 	if (sql) {
-		attributes[SemanticAttributes.DB_STATEMENT] = sql
+		attributes[ATTR_DB_QUERY_TEXT] = sql
 	}
 	return {
 		kind: SpanKind.CLIENT,
@@ -115,6 +129,9 @@ export function instrumentD1Fn(fn: Function, dbName: string, operation: string) 
 				// Create span for each statement, requires peeaking into D1 internals ...
 				const statements = argArray[0] as D1StatementInternals[]
 				return tracer.startActiveSpan(`${dbName} ${operation}`, async (span) => {
+					// Add batch size attribute
+					span.setAttribute(ATTR_DB_OPERATION_BATCH_SIZE, statements.length)
+
 					// Create a span per query in the batch
 					const subSpans = statements.map((s) =>
 						tracer.startSpan(`${dbName} ${operation} > query`, spanOptions(dbName, operation, s.statement)),

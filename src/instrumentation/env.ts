@@ -5,6 +5,9 @@ import { instrumentQueueSender } from './queue.js'
 import { instrumentServiceBinding } from './service.js'
 import { instrumentD1 } from './d1'
 import { instrumentAnalyticsEngineDataset } from './analytics-engine.js'
+import { instrumentR2Bucket } from './r2.js'
+import { instrumentImagesBinding } from './images.js'
+import { instrumentRateLimitBinding } from './rate-limit.js'
 
 const isJSRPC = (item?: unknown): item is Service => {
 	// @ts-expect-error The point of RPC types is to block non-existent properties, but that's the goal here
@@ -39,6 +42,31 @@ const isD1Database = (item?: unknown): item is D1Database => {
 	return !!(item as D1Database)?.exec && !!(item as D1Database)?.prepare
 }
 
+const isR2Bucket = (item?: unknown): item is R2Bucket => {
+	return !isJSRPC(item) && !!(item as R2Bucket)?.head && !!(item as R2Bucket)?.list
+}
+
+const isImagesBinding = (item?: unknown): boolean => {
+	// Images binding detection - has get, list, delete methods
+	// Note: Using generic detection since Images binding isn't in @cloudflare/workers-types yet
+	const obj = item as any
+	return (
+		!isJSRPC(item) &&
+		typeof obj?.get === 'function' &&
+		typeof obj?.list === 'function' &&
+		typeof obj?.delete === 'function' &&
+		// Distinguish from other bindings with similar methods
+		!isR2Bucket(item) &&
+		!isKVNamespace(item)
+	)
+}
+
+const isRateLimitBinding = (item?: unknown): boolean => {
+	// Rate Limiting binding detection - has limit method
+	const obj = item as any
+	return !isJSRPC(item) && typeof obj?.limit === 'function' && !isDurableObject(item)
+}
+
 const instrumentEnv = <E extends Record<string, unknown>>(env: E): E => {
 	const envHandler: ProxyHandler<Record<string, unknown>> = {
 		get: (target, prop, receiver) => {
@@ -61,6 +89,12 @@ const instrumentEnv = <E extends Record<string, unknown>>(env: E): E => {
 				return instrumentAnalyticsEngineDataset(item, String(prop))
 			} else if (isD1Database(item)) {
 				return instrumentD1(item, String(prop))
+			} else if (isR2Bucket(item)) {
+				return instrumentR2Bucket(item, String(prop))
+			} else if (isImagesBinding(item)) {
+				return instrumentImagesBinding(item as any, String(prop))
+			} else if (isRateLimitBinding(item)) {
+				return instrumentRateLimitBinding(item as any, String(prop))
 			} else {
 				return item
 			}

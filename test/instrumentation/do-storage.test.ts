@@ -23,6 +23,14 @@ const sqlMock = {
 	Statement: null as unknown as SqlStorageStatement,
 } as unknown as SqlStorage
 
+// kv mock
+const kvMock = {
+	get: vitest.fn().mockReturnValue(undefined),
+	list: vitest.fn().mockReturnValue(undefined),
+	put: vitest.fn().mockReturnValue(undefined),
+	delete: vitest.fn().mockReturnValue(undefined),
+} as SyncKvStorage
+
 const storage = {
 	get: vitest.fn().mockResolvedValue(null),
 	list: vitest.fn().mockResolvedValue(new Map()),
@@ -42,6 +50,7 @@ const storage = {
 	waitForBookmark: vitest.fn().mockResolvedValue(null),
 	ensureReplicas: vitest.fn().mockResolvedValue(null),
 	disableReplicas: vitest.fn().mockResolvedValue(null),
+	kv: kvMock,
 } satisfies DurableObjectStorage
 
 beforeEach(() => {
@@ -62,12 +71,9 @@ describe('delete', () => {
 		expect(spans[0]?.name).toMatchInlineSnapshot(`"Durable Object Storage delete"`)
 		expect(spans[0]?.attributes).toMatchInlineSnapshot(`
 			{
-			  "db.cf.do.has_result": true,
-			  "db.cf.do.key": "key",
-			  "db.operation": "delete",
-			  "db.statement": "delete key",
-			  "db.system": "Cloudflare DO",
-			  "operation": "delete",
+			  "cloudflare.durable_object.kv.query.keys": "key",
+			  "db.operation.name": "delete",
+			  "db.system.name": "Cloudflare DO",
 			}
 		`)
 	})
@@ -84,13 +90,10 @@ describe('delete', () => {
 		expect(spans[0]?.name).toMatchInlineSnapshot(`"Durable Object Storage delete"`)
 		expect(spans[0]?.attributes).toMatchInlineSnapshot(`
 			{
-			  "db.cf.do.has_result": true,
-			  "db.cf.do.key": "key1",
-			  "db.cf.do.number_of_keys": 2,
-			  "db.operation": "delete",
-			  "db.statement": "delete key1,key2",
-			  "db.system": "Cloudflare DO",
-			  "operation": "delete",
+			  "cloudflare.durable_object.kv.query.keys": "key1",
+			  "cloudflare.durable_object.kv.query.keys.count": 2,
+			  "db.operation.name": "delete",
+			  "db.system.name": "Cloudflare DO",
 			}
 		`)
 	})
@@ -107,14 +110,11 @@ describe('delete', () => {
 		expect(spans[0]?.name).toMatchInlineSnapshot(`"Durable Object Storage delete"`)
 		expect(spans[0]?.attributes).toMatchInlineSnapshot(`
 			{
-			  "db.cf.do.allow_concurrency": true,
-			  "db.cf.do.has_result": true,
-			  "db.cf.do.key": "key",
-			  "db.cf.do.no_cache": true,
-			  "db.operation": "delete",
-			  "db.statement": "delete key",
-			  "db.system": "Cloudflare DO",
-			  "operation": "delete",
+			  "cloudflare.durable_object.allow_concurrency": true,
+			  "cloudflare.durable_object.kv.query.keys": "key",
+			  "cloudflare.durable_object.no_cache": true,
+			  "db.operation.name": "delete",
+			  "db.system.name": "Cloudflare DO",
 			}
 		`)
 		expect(spans[0]?.events).toEqual([])
@@ -145,11 +145,8 @@ describe('deleteAll', () => {
 		expect(spans[0]?.name).toMatchInlineSnapshot(`"Durable Object Storage deleteAll"`)
 		expect(spans[0]?.attributes).toMatchInlineSnapshot(`
 			{
-			  "db.cf.do.has_result": false,
-			  "db.operation": "deleteAll",
-			  "db.statement": "deleteAll undefined",
-			  "db.system": "Cloudflare DO",
-			  "operation": "deleteAll",
+			  "db.operation.name": "deleteAll",
+			  "db.system.name": "Cloudflare DO",
 			}
 		`)
 	})
@@ -191,12 +188,9 @@ describe('get', () => {
 		expect(spans[0]?.name).toMatchInlineSnapshot(`"Durable Object Storage get"`)
 		expect(spans[0]?.attributes).toMatchInlineSnapshot(`
 			{
-			  "db.cf.do.has_result": true,
-			  "db.cf.do.key": "key",
-			  "db.operation": "get",
-			  "db.statement": "get key",
-			  "db.system": "Cloudflare DO",
-			  "operation": "get",
+			  "cloudflare.durable_object.kv.query.keys": "key",
+			  "db.operation.name": "get",
+			  "db.system.name": "Cloudflare DO",
 			}
 		`)
 	})
@@ -213,13 +207,10 @@ describe('get', () => {
 		expect(spans[0]?.name).toMatchInlineSnapshot(`"Durable Object Storage get"`)
 		expect(spans[0]?.attributes).toMatchInlineSnapshot(`
 			{
-			  "db.cf.do.has_result": true,
-			  "db.cf.do.key": "key1",
-			  "db.cf.do.number_of_keys": 2,
-			  "db.operation": "get",
-			  "db.statement": "get key1,key2",
-			  "db.system": "Cloudflare DO",
-			  "operation": "get",
+			  "cloudflare.durable_object.kv.query.keys": "key1",
+			  "cloudflare.durable_object.kv.query.keys.count": 2,
+			  "db.operation.name": "get",
+			  "db.system.name": "Cloudflare DO",
 			}
 		`)
 	})
@@ -236,14 +227,11 @@ describe('get', () => {
 		expect(spans[0]?.name).toMatchInlineSnapshot(`"Durable Object Storage get"`)
 		expect(spans[0]?.attributes).toMatchInlineSnapshot(`
 			{
-			  "db.cf.do.allow_concurrency": true,
-			  "db.cf.do.has_result": true,
-			  "db.cf.do.key": "key",
-			  "db.cf.do.no_cache": true,
-			  "db.operation": "get",
-			  "db.statement": "get key",
-			  "db.system": "Cloudflare DO",
-			  "operation": "get",
+			  "cloudflare.durable_object.allow_concurrency": true,
+			  "cloudflare.durable_object.kv.query.keys": "key",
+			  "cloudflare.durable_object.no_cache": true,
+			  "db.operation.name": "get",
+			  "db.system.name": "Cloudflare DO",
 			}
 		`)
 		expect(spans[0]?.events).toEqual([])
@@ -281,12 +269,8 @@ describe('list', () => {
 		expect(spans[0]?.name).toMatchInlineSnapshot(`"Durable Object Storage list"`)
 		expect(spans[0]?.attributes).toMatchInlineSnapshot(`
 			{
-			  "db.cf.do.has_result": true,
-			  "db.cf.do.number_of_results": 0,
-			  "db.operation": "list",
-			  "db.statement": "list undefined",
-			  "db.system": "Cloudflare DO",
-			  "operation": "list",
+			  "db.operation.name": "list",
+			  "db.system.name": "Cloudflare DO",
 			}
 		`)
 		expect(spans[0]?.events).toEqual([])
@@ -304,12 +288,8 @@ describe('list', () => {
 		expect(spans[0]?.name).toMatchInlineSnapshot(`"Durable Object Storage list"`)
 		expect(spans[0]?.attributes).toMatchInlineSnapshot(`
 			{
-			  "db.cf.do.has_result": true,
-			  "db.cf.do.number_of_results": 0,
-			  "db.operation": "list",
-			  "db.statement": "list [object Object]",
-			  "db.system": "Cloudflare DO",
-			  "operation": "list",
+			  "db.operation.name": "list",
+			  "db.system.name": "Cloudflare DO",
 			}
 		`)
 		expect(spans[0]?.events).toEqual([])
@@ -344,12 +324,9 @@ describe('put', () => {
 		expect(spans[0]?.name).toMatchInlineSnapshot(`"Durable Object Storage put"`)
 		expect(spans[0]?.attributes).toMatchInlineSnapshot(`
 			{
-			  "db.cf.do.has_result": false,
-			  "db.cf.do.key": "key",
-			  "db.operation": "put",
-			  "db.statement": "put key",
-			  "db.system": "Cloudflare DO",
-			  "operation": "put",
+			  "cloudflare.durable_object.kv.query.keys": "key",
+			  "db.operation.name": "put",
+			  "db.system.name": "Cloudflare DO",
 			}
 		`)
 		expect(spans[0]?.events).toEqual([])
@@ -370,15 +347,12 @@ describe('put', () => {
 		expect(spans[0]?.name).toMatchInlineSnapshot(`"Durable Object Storage put"`)
 		expect(spans[0]?.attributes).toMatchInlineSnapshot(`
 			{
-			  "db.cf.do.allow_concurrency": true,
-			  "db.cf.do.allow_unconfirmed": true,
-			  "db.cf.do.has_result": false,
-			  "db.cf.do.key": "key",
-			  "db.cf.do.no_cache": true,
-			  "db.operation": "put",
-			  "db.statement": "put key",
-			  "db.system": "Cloudflare DO",
-			  "operation": "put",
+			  "cloudflare.durable_object.allow_concurrency": true,
+			  "cloudflare.durable_object.allow_unconfirmed": true,
+			  "cloudflare.durable_object.kv.query.keys": "key",
+			  "cloudflare.durable_object.no_cache": true,
+			  "db.operation.name": "put",
+			  "db.system.name": "Cloudflare DO",
 			}
 		`)
 		expect(spans[0]?.events).toEqual([])
@@ -398,13 +372,10 @@ describe('put', () => {
 		expect(spans[0]?.name).toMatchInlineSnapshot(`"Durable Object Storage put"`)
 		expect(spans[0]?.attributes).toMatchInlineSnapshot(`
 			{
-			  "db.cf.do.has_result": false,
-			  "db.cf.do.key": "key1",
-			  "db.cf.do.number_of_keys": 2,
-			  "db.operation": "put",
-			  "db.statement": "put [object Object]",
-			  "db.system": "Cloudflare DO",
-			  "operation": "put",
+			  "cloudflare.durable_object.kv.query.keys": "key1",
+			  "cloudflare.durable_object.kv.query.keys.count": 2,
+			  "db.operation.name": "put",
+			  "db.system.name": "Cloudflare DO",
 			}
 		`)
 		expect(spans[0]?.events).toEqual([])
@@ -431,16 +402,13 @@ describe('put', () => {
 		expect(spans[0]?.name).toMatchInlineSnapshot(`"Durable Object Storage put"`)
 		expect(spans[0]?.attributes).toMatchInlineSnapshot(`
 			{
-			  "db.cf.do.allow_concurrency": true,
-			  "db.cf.do.allow_unconfirmed": true,
-			  "db.cf.do.has_result": false,
-			  "db.cf.do.key": "key1",
-			  "db.cf.do.no_cache": true,
-			  "db.cf.do.number_of_keys": 2,
-			  "db.operation": "put",
-			  "db.statement": "put [object Object]",
-			  "db.system": "Cloudflare DO",
-			  "operation": "put",
+			  "cloudflare.durable_object.allow_concurrency": true,
+			  "cloudflare.durable_object.allow_unconfirmed": true,
+			  "cloudflare.durable_object.kv.query.keys": "key1",
+			  "cloudflare.durable_object.kv.query.keys.count": 2,
+			  "cloudflare.durable_object.no_cache": true,
+			  "db.operation.name": "put",
+			  "db.system.name": "Cloudflare DO",
 			}
 		`)
 		expect(spans[0]?.events).toEqual([])
@@ -474,11 +442,8 @@ test('sync', async () => {
 	expect(spans[0]?.name).toMatchInlineSnapshot(`"Durable Object Storage sync"`)
 	expect(spans[0]?.attributes).toMatchInlineSnapshot(`
 		{
-		  "db.cf.do.has_result": false,
-		  "db.operation": "sync",
-		  "db.statement": "sync undefined",
-		  "db.system": "Cloudflare DO",
-		  "operation": "sync",
+		  "db.operation.name": "sync",
+		  "db.system.name": "Cloudflare DO",
 		}
 	`)
 })

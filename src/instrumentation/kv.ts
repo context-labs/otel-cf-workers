@@ -1,6 +1,27 @@
 import { Attributes, SpanKind, SpanOptions, trace } from '@opentelemetry/api'
 import { SemanticAttributes } from '@opentelemetry/semantic-conventions'
 import { wrap } from '../wrap.js'
+import {
+	ATTR_CLOUDFLARE_BINDING_TYPE,
+	ATTR_CLOUDFLARE_BINDING_NAME,
+	ATTR_DB_SYSTEM_NAME,
+	ATTR_DB_OPERATION_NAME,
+	ATTR_CLOUDFLARE_KV_QUERY_KEYS,
+	ATTR_CLOUDFLARE_KV_QUERY_KEYS_COUNT,
+	ATTR_CLOUDFLARE_KV_QUERY_TYPE,
+	ATTR_CLOUDFLARE_KV_QUERY_CACHE_TTL,
+	ATTR_CLOUDFLARE_KV_QUERY_VALUE_TYPE,
+	ATTR_CLOUDFLARE_KV_QUERY_EXPIRATION,
+	ATTR_CLOUDFLARE_KV_QUERY_EXPIRATION_TTL,
+	ATTR_CLOUDFLARE_KV_QUERY_METADATA,
+	ATTR_CLOUDFLARE_KV_QUERY_PREFIX,
+	ATTR_CLOUDFLARE_KV_QUERY_LIMIT,
+	ATTR_CLOUDFLARE_KV_QUERY_CURSOR,
+	ATTR_CLOUDFLARE_KV_RESPONSE_CACHE_STATUS,
+	ATTR_CLOUDFLARE_KV_RESPONSE_LIST_COMPLETE,
+	ATTR_CLOUDFLARE_KV_RESPONSE_CURSOR,
+	ATTR_CLOUDFLARE_KV_RESPONSE_METADATA,
+} from '../constants.js'
 
 type ExtraAttributeFn = (argArray: any[], result: any) => Attributes
 
@@ -14,10 +35,10 @@ const KVAttributes: Record<string | symbol, ExtraAttributeFn> = {
 		const attrs: Attributes = {}
 		const opts = argArray[1]
 		if (typeof opts === 'string') {
-			attrs['db.cf.kv.type'] = opts
+			attrs[ATTR_CLOUDFLARE_KV_QUERY_TYPE] = opts
 		} else if (typeof opts === 'object') {
-			attrs['db.cf.kv.type'] = opts.type
-			attrs['db.cf.kv.cache_ttl'] = opts.cacheTtl
+			if (opts.type) attrs[ATTR_CLOUDFLARE_KV_QUERY_TYPE] = opts.type
+			if (opts.cacheTtl) attrs[ATTR_CLOUDFLARE_KV_QUERY_CACHE_TTL] = opts.cacheTtl
 		}
 		return attrs
 	},
@@ -25,42 +46,51 @@ const KVAttributes: Record<string | symbol, ExtraAttributeFn> = {
 		const attrs: Attributes = {}
 		const opts = argArray[1]
 		if (typeof opts === 'string') {
-			attrs['db.cf.kv.type'] = opts
+			attrs[ATTR_CLOUDFLARE_KV_QUERY_TYPE] = opts
 		} else if (typeof opts === 'object') {
-			attrs['db.cf.kv.type'] = opts.type
-			attrs['db.cf.kv.cache_ttl'] = opts.cacheTtl
+			if (opts.type) attrs[ATTR_CLOUDFLARE_KV_QUERY_TYPE] = opts.type
+			if (opts.cacheTtl) attrs[ATTR_CLOUDFLARE_KV_QUERY_CACHE_TTL] = opts.cacheTtl
 		}
 
-		attrs['db.cf.kv.metadata'] = true
-		const { cacheStatus } = result as KVNamespaceGetWithMetadataResult<any, any>
-		if (typeof cacheStatus === 'string') {
-			attrs['db.cf.kv.cache_status'] = cacheStatus
+		const kvResult = result as KVNamespaceGetWithMetadataResult<any, any>
+		if (kvResult.metadata !== null && kvResult.metadata !== undefined) {
+			attrs[ATTR_CLOUDFLARE_KV_RESPONSE_METADATA] = JSON.stringify(kvResult.metadata)
+		}
+		if (kvResult.cacheStatus) {
+			attrs[ATTR_CLOUDFLARE_KV_RESPONSE_CACHE_STATUS] = kvResult.cacheStatus
 		}
 		return attrs
 	},
 	list(argArray, result) {
 		const attrs: Attributes = {}
 		const opts: KVNamespaceListOptions = argArray[0] || {}
-		const { cursor, limit } = opts
-		attrs['db.cf.kv.list_request_cursor'] = cursor || undefined
-		attrs['db.cf.kv.list_limit'] = limit || undefined
-		const { list_complete, cacheStatus } = result as KVNamespaceListResult<any, any>
-		attrs['db.cf.kv.list_complete'] = list_complete || undefined
-		if (!list_complete) {
-			attrs['db.cf.kv.list_response_cursor'] = cursor || undefined
+		if (opts.cursor) attrs[ATTR_CLOUDFLARE_KV_QUERY_CURSOR] = opts.cursor
+		if (opts.limit) attrs[ATTR_CLOUDFLARE_KV_QUERY_LIMIT] = opts.limit
+		if (opts.prefix) attrs[ATTR_CLOUDFLARE_KV_QUERY_PREFIX] = opts.prefix
+
+		const kvResult = result as KVNamespaceListResult<any, any>
+		attrs[ATTR_CLOUDFLARE_KV_RESPONSE_LIST_COMPLETE] = kvResult.list_complete
+		if (!kvResult.list_complete && kvResult.cursor) {
+			attrs[ATTR_CLOUDFLARE_KV_RESPONSE_CURSOR] = kvResult.cursor
 		}
-		if (typeof cacheStatus === 'string') {
-			attrs['db.cf.kv.cache_status'] = cacheStatus
+		if (kvResult.cacheStatus) {
+			attrs[ATTR_CLOUDFLARE_KV_RESPONSE_CACHE_STATUS] = kvResult.cacheStatus
 		}
 		return attrs
 	},
 	put(argArray) {
 		const attrs: Attributes = {}
+		const value = argArray[1]
+		if (value !== undefined) {
+			attrs[ATTR_CLOUDFLARE_KV_QUERY_VALUE_TYPE] = typeof value
+		}
 		if (argArray.length > 2 && argArray[2]) {
-			const { expiration, expirationTtl, metadata } = argArray[2] as KVNamespacePutOptions
-			attrs['db.cf.kv.expiration'] = expiration
-			attrs['db.cf.kv.expiration_ttl'] = expirationTtl
-			attrs['db.cf.kv.metadata'] = !!metadata
+			const options = argArray[2] as KVNamespacePutOptions
+			if (options.expiration) attrs[ATTR_CLOUDFLARE_KV_QUERY_EXPIRATION] = options.expiration
+			if (options.expirationTtl) attrs[ATTR_CLOUDFLARE_KV_QUERY_EXPIRATION_TTL] = options.expirationTtl
+			if (options.metadata !== undefined) {
+				attrs[ATTR_CLOUDFLARE_KV_QUERY_METADATA] = JSON.stringify(options.metadata)
+			}
 		}
 		return attrs
 	},
@@ -71,10 +101,11 @@ function instrumentKVFn(fn: Function, name: string, operation: string) {
 	const fnHandler: ProxyHandler<any> = {
 		apply: (target, thisArg, argArray) => {
 			const attributes = {
-				binding_type: 'KV',
+				[ATTR_CLOUDFLARE_BINDING_TYPE]: 'KV',
+				[ATTR_CLOUDFLARE_BINDING_NAME]: name,
 				[SemanticAttributes.DB_NAME]: name,
-				[SemanticAttributes.DB_SYSTEM]: dbSystem,
-				[SemanticAttributes.DB_OPERATION]: operation,
+				[ATTR_DB_SYSTEM_NAME]: dbSystem,
+				[ATTR_DB_OPERATION_NAME]: operation,
 			}
 			const options: SpanOptions = {
 				kind: SpanKind.CLIENT,
@@ -85,20 +116,23 @@ function instrumentKVFn(fn: Function, name: string, operation: string) {
 				const extraAttrsFn = KVAttributes[operation]
 				const extraAttrs = extraAttrsFn ? extraAttrsFn(argArray, result) : {}
 				span.setAttributes(extraAttrs)
+
+				// Add key/keys attributes
 				if (operation === 'list') {
-					const opts: KVNamespaceListOptions = argArray[0] || {}
-					const { prefix } = opts
-					span.setAttribute(SemanticAttributes.DB_STATEMENT, `${operation} ${prefix || undefined}`)
-				} else {
-					span.setAttribute(SemanticAttributes.DB_STATEMENT, `${operation} ${argArray[0]}`)
-					span.setAttribute('db.cf.kv.key', argArray[0])
+					// No specific key for list operations
+				} else if (Array.isArray(argArray[0])) {
+					// Multi-key operation
+					const keys = argArray[0] as string[]
+					if (keys.length > 0 && keys[0]) {
+						span.setAttribute(ATTR_CLOUDFLARE_KV_QUERY_KEYS, keys[0])
+						span.setAttribute(ATTR_CLOUDFLARE_KV_QUERY_KEYS_COUNT, keys.length)
+					}
+				} else if (argArray[0] && typeof argArray[0] === 'string') {
+					// Single key operation
+					span.setAttribute(ATTR_CLOUDFLARE_KV_QUERY_KEYS, argArray[0])
+					span.setAttribute(ATTR_CLOUDFLARE_KV_QUERY_KEYS_COUNT, 1)
 				}
-				if (operation === 'getWithMetadata') {
-					const hasResults = !!result && !!(result as KVNamespaceGetWithMetadataResult<string, unknown>).value
-					span.setAttribute('db.cf.kv.has_result', hasResults)
-				} else {
-					span.setAttribute('db.cf.kv.has_result', !!result)
-				}
+
 				span.end()
 				return result
 			})

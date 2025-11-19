@@ -5,6 +5,7 @@ import {
 	ATTR_RPC_MESSAGE_ID,
 } from '@opentelemetry/semantic-conventions/incubating'
 import { HandlerInstrumentation, OrPromise } from '../types'
+import { ATTR_CLOUDFLARE_EMAIL_FROM, ATTR_CLOUDFLARE_EMAIL_TO, ATTR_CLOUDFLARE_EMAIL_SIZE } from '../constants.js'
 
 /**
  * Converts the message headers into a record ready to be injected
@@ -27,6 +28,9 @@ export const emailInstrumentation: HandlerInstrumentation<ForwardableEmailMessag
 			[ATTR_FAAS_TRIGGER]: 'other',
 			[ATTR_RPC_MESSAGE_ID]: message.headers.get('Message-Id') ?? undefined,
 			[ATTR_MESSAGING_DESTINATION_NAME]: message.to,
+			[ATTR_CLOUDFLARE_EMAIL_FROM]: message.from,
+			[ATTR_CLOUDFLARE_EMAIL_TO]: message.to,
+			[ATTR_CLOUDFLARE_EMAIL_SIZE]: message.rawSize,
 		}
 		Object.assign(attributes, headerAttributes(message))
 		const options = {

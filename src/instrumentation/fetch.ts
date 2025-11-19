@@ -14,6 +14,22 @@ import { getActiveConfig } from '../config.js'
 import { wrap } from '../wrap.js'
 import { HandlerInstrumentation, OrPromise, ResolvedTraceConfig } from '../types.js'
 import { ReadableSpan } from '@opentelemetry/sdk-trace-base'
+import { gatherUserAgentAttributes } from './user-agent.js'
+import { gatherRootSpanAttributes } from './universal-attributes.js'
+import {
+	ATTR_CLOUDFLARE_ASN,
+	ATTR_CLOUDFLARE_VERIFIED_BOT_CATEGORY,
+	ATTR_GEO_TIMEZONE,
+	ATTR_GEO_CONTINENT_CODE,
+	ATTR_GEO_COUNTRY_CODE,
+	ATTR_GEO_LOCALITY_NAME,
+	ATTR_GEO_LOCALITY_REGION,
+	ATTR_HTTP_REQUEST_HEADER_ACCEPT,
+	ATTR_HTTP_REQUEST_HEADER_ACCEPT_ENCODING,
+	ATTR_HTTP_REQUEST_HEADER_ACCEPT_LANGUAGE,
+	ATTR_HTTP_REQUEST_HEADER_CONTENT_TYPE,
+	ATTR_HTTP_REQUEST_HEADER_CONTENT_LENGTH,
+} from '../constants.js'
 
 type IncomingRequest = Parameters<ExportedHandlerFetchHandler>[0]
 
@@ -55,22 +71,58 @@ const gatherOutgoingCfAttributes = (cf: RequestInitCfProperties): Attributes => 
 }
 
 export function gatherRequestAttributes(request: Request): Attributes {
-	const attrs: Record<string, string | number> = {}
+	const attrs: Attributes = {}
 	const headers = request.headers
+
+	// HTTP method and protocol
 	attrs['http.request.method'] = request.method.toUpperCase()
 	attrs['network.protocol.name'] = 'http'
-	attrs['network.protocol.version'] = request.cf?.httpProtocol as string
-	attrs['http.request.body.size'] = headers.get('content-length')!
-	attrs['user_agent.original'] = headers.get('user-agent')!
-	attrs['http.mime_type'] = headers.get('content-type')!
-	attrs['http.accepts'] = request.cf?.clientAcceptEncoding as string
+	if (request.cf?.httpProtocol) {
+		attrs['network.protocol.version'] = request.cf.httpProtocol as string
+	}
 
+	// Request headers
+	const contentLength = headers.get('content-length')
+	if (contentLength) {
+		attrs['http.request.body.size'] = parseInt(contentLength, 10)
+		attrs[ATTR_HTTP_REQUEST_HEADER_CONTENT_LENGTH] = contentLength
+	}
+
+	const userAgent = headers.get('user-agent')
+	if (userAgent) attrs['user_agent.original'] = userAgent
+
+	const contentType = headers.get('content-type')
+	if (contentType) {
+		attrs['http.mime_type'] = contentType
+		attrs[ATTR_HTTP_REQUEST_HEADER_CONTENT_TYPE] = contentType
+	}
+
+	const accept = headers.get('accept')
+	if (accept) attrs[ATTR_HTTP_REQUEST_HEADER_ACCEPT] = accept
+
+	const acceptEncoding = headers.get('accept-encoding')
+	if (acceptEncoding) {
+		attrs['http.accepts'] = acceptEncoding
+		attrs[ATTR_HTTP_REQUEST_HEADER_ACCEPT_ENCODING] = acceptEncoding
+	}
+
+	const acceptLanguage = headers.get('accept-language')
+	if (acceptLanguage) attrs[ATTR_HTTP_REQUEST_HEADER_ACCEPT_LANGUAGE] = acceptLanguage
+
+	// URL attributes
 	const u = new URL(request.url)
 	attrs['url.full'] = `${u.protocol}//${u.host}${u.pathname}${u.search}`
 	attrs['server.address'] = u.host
-	attrs['url.scheme'] = u.protocol
+	attrs['url.scheme'] = u.protocol.replace(':', '')
 	attrs['url.path'] = u.pathname
-	attrs['url.query'] = u.search
+	if (u.search) attrs['url.query'] = u.search
+
+	// Server port
+	if (u.port) {
+		attrs['server.port'] = parseInt(u.port, 10)
+	} else {
+		attrs['server.port'] = u.protocol === 'https:' ? 443 : 80
+	}
 
 	return attrs
 }
@@ -86,14 +138,32 @@ export function gatherResponseAttributes(response: Response): Attributes {
 }
 
 export function gatherIncomingCfAttributes(request: Request): Attributes {
-	const attrs: Record<string, string | number> = {}
-	attrs['net.colo'] = request.cf?.colo as string
-	attrs['net.country'] = request.cf?.country as string
-	attrs['net.request_priority'] = request.cf?.requestPriority as string
-	attrs['net.tls_cipher'] = request.cf?.tlsCipher as string
-	attrs['net.tls_version'] = request.cf?.tlsVersion as string
-	attrs['net.asn'] = request.cf?.asn as number
-	attrs['net.tcp_rtt'] = request.cf?.clientTcpRtt as number
+	const attrs: Attributes = {}
+
+	if (!request.cf) {
+		return attrs
+	}
+
+	// Network attributes
+	if (request.cf.colo) attrs['net.colo'] = request.cf.colo as string
+	if (request.cf.country) attrs['net.country'] = request.cf.country as string
+	if (request.cf.requestPriority) attrs['net.request_priority'] = request.cf.requestPriority as string
+	if (request.cf.tlsCipher) attrs['net.tls_cipher'] = request.cf.tlsCipher as string
+	if (request.cf.tlsVersion) attrs['net.tls_version'] = request.cf.tlsVersion as string
+	if (request.cf.asn) attrs[ATTR_CLOUDFLARE_ASN] = request.cf.asn as number
+	if (request.cf.clientTcpRtt) attrs['net.tcp_rtt'] = request.cf.clientTcpRtt as number
+
+	// Geo attributes
+	if (request.cf.timezone) attrs[ATTR_GEO_TIMEZONE] = request.cf.timezone as string
+	if (request.cf.continent) attrs[ATTR_GEO_CONTINENT_CODE] = request.cf.continent as string
+	if (request.cf.country) attrs[ATTR_GEO_COUNTRY_CODE] = request.cf.country as string
+	if (request.cf.city) attrs[ATTR_GEO_LOCALITY_NAME] = request.cf.city as string
+	if (request.cf.region) attrs[ATTR_GEO_LOCALITY_REGION] = request.cf.region as string
+
+	// Bot detection
+	// @ts-expect-error - verifiedBotCategory may not be typed yet
+	if (request.cf.verifiedBotCategory) attrs[ATTR_CLOUDFLARE_VERIFIED_BOT_CATEGORY] = request.cf.verifiedBotCategory
+
 	return attrs
 }
 
@@ -139,6 +209,8 @@ export const fetchInstrumentation: HandlerInstrumentation<IncomingRequest, OrPro
 		}
 		Object.assign(attributes, gatherRequestAttributes(request))
 		Object.assign(attributes, gatherIncomingCfAttributes(request))
+		Object.assign(attributes, gatherRootSpanAttributes(request, 'fetch'))
+		Object.assign(attributes, gatherUserAgentAttributes(request))
 		const method = request.method.toUpperCase()
 		return {
 			name: `fetchHandler ${method}`,

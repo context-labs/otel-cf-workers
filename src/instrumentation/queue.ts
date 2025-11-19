@@ -2,6 +2,7 @@ import { trace, SpanKind, Attributes, Span } from '@opentelemetry/api'
 import { unwrap, wrap } from '../wrap.js'
 import { HandlerInstrumentation, InitialSpanInfo, OrPromise } from '../types.js'
 import { ATTR_FAAS_TRIGGER, FAAS_TRIGGER_VALUE_PUBSUB } from '@opentelemetry/semantic-conventions/incubating'
+import { ATTR_CLOUDFLARE_QUEUE_NAME, ATTR_CLOUDFLARE_QUEUE_BATCH_SIZE } from '../constants.js'
 
 type QueueHandler = ExportedHandlerQueueHandler<unknown, unknown>
 export type QueueHandlerArgs = Parameters<QueueHandler>
@@ -142,7 +143,8 @@ export class QueueInstrumentation implements HandlerInstrumentation<MessageBatch
 			options: {
 				attributes: {
 					[ATTR_FAAS_TRIGGER]: FAAS_TRIGGER_VALUE_PUBSUB,
-					'queue.name': batch.queue,
+					[ATTR_CLOUDFLARE_QUEUE_NAME]: batch.queue,
+					[ATTR_CLOUDFLARE_QUEUE_BATCH_SIZE]: batch.messages.length,
 				},
 				kind: SpanKind.CONSUMER,
 			},

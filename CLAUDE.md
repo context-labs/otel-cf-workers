@@ -408,6 +408,54 @@ await this.ctx.storage.list()
 await this.ctx.storage.setAlarm(Date.now() + 60000)
 ```
 
+## Attribute Alignment with Cloudflare Official Telemetry
+
+As of v2.0.0, all instrumentation attributes are aligned with [Cloudflare's official Workers observability specification](https://developers.cloudflare.com/workers/observability/). This ensures compatibility and consistency with Cloudflare's native telemetry.
+
+### Universal Attributes (All Spans)
+
+```typescript
+'cloud.provider': 'cloudflare'
+'cloud.platform': 'cloudflare.workers'
+'telemetry.sdk.name': '@inference-net/otel-cf-workers'
+'telemetry.sdk.language': 'javascript'
+'cloudflare.script_name': '<worker-name>'
+```
+
+### Root Span Attributes
+
+```typescript
+'cloudflare.ray_id': '<cf-ray-id>'           // Unique request ID
+'cloudflare.colo': '<airport-code>'           // Data center location
+'cloudflare.handler_type': 'fetch' | 'scheduled' | 'queue' | 'email' | 'alarm'
+'cloudflare.execution_model': 'stateless' | 'stateful'
+```
+
+### Attribute Naming Conventions
+
+All Cloudflare-specific attributes follow the pattern:
+
+- `cloudflare.<service>.<type>.<attribute>` for service-specific attributes
+- `cloudflare.<attribute>` for general platform attributes
+
+Examples:
+
+- `cloudflare.d1.response.rows_read` - D1 database rows read
+- `cloudflare.kv.query.keys` - KV key being accessed
+- `cloudflare.queue.batch_size` - Number of messages in queue batch
+
+### Comparison: Our Attributes vs. Cloudflare Official
+
+All instrumented services now use Cloudflare's official attribute keys. Key changes from previous versions:
+
+| Service    | Old Attribute       | New Attribute                             |
+| ---------- | ------------------- | ----------------------------------------- |
+| All        | `binding_type`      | `cloudflare.binding.type`                 |
+| D1         | `db.cf.d1.duration` | `cloudflare.d1.response.sql_duration_ms`  |
+| KV         | `db.cf.kv.key`      | `cloudflare.kv.query.keys`                |
+| Queue      | `queue.name`        | `cloudflare.queue.name`                   |
+| DO Storage | `db.cf.do.key`      | `cloudflare.durable_object.kv.query.keys` |
+
 ### Manual Span Creation
 
 ```typescript
@@ -550,15 +598,211 @@ yarn ci             # Full CI workflow (clean + build + check)
 - Applications using R2, AI, Vectorize heavily (not instrumented yet)
 - CommonJS projects (ESM only as of v1.0.0-rc.52)
 
+## Missing Instrumentation vs. Cloudflare Official
+
+Below is a comprehensive comparison of what Cloudflare's official Workers observability supports that this library does NOT yet implement.
+
+### ❌ Missing Bindings (High Priority)
+
+#### **R2 Object Storage** (NOT IMPLEMENTED)
+
+Cloudflare's official telemetry includes full R2 instrumentation with extensive attributes:
+
+**Operations Missing:**
+
+- `r2_head` - Object metadata
+- `r2_get` - Object retrieval with range/conditional requests
+- `r2_put` - Object upload with checksums/metadata
+- `r2_list` - Bucket listing
+- `r2_delete` - Single/batch deletion
+- `r2_createMultipartUpload` - Multipart upload initiation
+- `r2_uploadPart` - Part upload
+- `r2_abortMultipartUpload` - Abort upload
+- `r2_completeMultipartUpload` - Complete upload
+
+**Key Attributes Missing:**
+
+- `cloudflare.r2.bucket`, `cloudflare.r2.operation`
+- `cloudflare.r2.request.key`, `cloudflare.r2.request.size`
+- `cloudflare.r2.request.range.*` (offset, length, suffix)
+- `cloudflare.r2.request.ssec_key` - Server-side encryption
+- `cloudflare.r2.request.checksum.*` (type, value)
+- `cloudflare.r2.response.etag`, `cloudflare.r2.response.size`
+- `cloudflare.r2.response.storage_class`
+- HTTP metadata (content-type, cache-control, etc.)
+- Conditional request attributes (only_if.\*)
+
+**Impact:** R2 is a major Cloudflare service. Missing instrumentation means no visibility into object storage operations.
+
+---
+
+#### **Durable Object SQL Storage API** (NOT IMPLEMENTED)
+
+Cloudflare added a new SQLite-backed storage API for Durable Objects. We only support the legacy KV-style API.
+
+**Operations Missing:**
+
+- `durable_object_storage_exec` - Execute SQL
+- `durable_object_storage_getDatabaseSize` - Get DB size
+- `durable_object_storage_ingest` - Bulk data ingest
+- SQL-backed `kv_get/put/delete/list` - KV operations on SQL storage
+
+**Key Attributes Missing:**
+
+- `cloudflare.durable_object.query.bindings` - SQL parameter bindings
+- `cloudflare.durable_object.response.rows_read/rows_written`
+- `cloudflare.durable_object.response.db_size`
+- `cloudflare.durable_object.response.statement_count`
+
+**Impact:** Users of the new SQL storage API get no instrumentation.
+
+---
+
+#### **Images Binding** (NOT IMPLEMENTED)
+
+**Operations Missing:**
+
+- `images_output` - Transform images
+- `images_info` - Get image metadata
+
+**Key Attributes Missing:**
+
+- `cloudflare.images.options.*` (format, quality, background, transforms)
+- `cloudflare.images.result.*` (format, file_size, width, height)
+- `cloudflare.images.error.code`
+
+---
+
+#### **Email Sending Operations** (PARTIALLY IMPLEMENTED)
+
+We instrument the **email handler** (incoming email) but not outbound email operations:
+
+**Operations Missing:**
+
+- `reply_email` - Reply to email
+- `forward_email` - Forward email
+- `send_email` - Send new email
+
+---
+
+#### **Rate Limiting Binding** (NOT IMPLEMENTED)
+
+**Operations Missing:**
+
+- `ratelimit_run` - Execute rate limit check
+
+---
+
+#### **Browser Rendering** (NOT IMPLEMENTED)
+
+**Operations Missing:**
+
+- `browser_rendering_fetch` - Puppeteer API calls
+
+---
+
+### ❌ Missing Handlers
+
+#### **RPC Handler** (NOT IMPLEMENTED)
+
+Cloudflare supports RPC-style Durable Object method calls with automatic instrumentation:
+
+```typescript
+// NOT instrumented by us:
+await stub.myRpcMethod(args)
+```
+
+**Key Attributes Missing:**
+
+- `cloudflare.jsrpc.method` - RPC method name
+
+**Impact:** RPC calls to Durable Objects are completely invisible in traces.
+
+---
+
+#### **Tail Handler** (NOT IMPLEMENTED)
+
+**Operations Missing:**
+
+- `handler.tail` - Tail consumer for trace aggregation
+
+**Key Attributes Missing:**
+
+- `cloudflare.trace.count` - Number of traces in tail batch
+
+---
+
+### ⚠️ Partially Implemented Services
+
+#### **Cache API** (BASIC IMPLEMENTATION)
+
+We instrument cache operations but are missing:
+
+**Missing Attributes:**
+
+- `cache_control.expiration` - Cache expiration time
+- `cache_control.revalidation` - Revalidation settings
+
+---
+
+#### **Fetch Handler** (MISSING SOME ATTRIBUTES)
+
+We have extensive fetch instrumentation but are missing:
+
+**Missing Attributes:**
+
+- `cloudflare.response.time_to_first_byte_ms` - TTFB metric
+- Some detailed `user_agent.*` fields may be incomplete depending on Request.cf availability
+
+---
+
+### 📊 Summary of Instrumentation Coverage
+
+| Service/Handler                   | Status             | Coverage                            |
+| --------------------------------- | ------------------ | ----------------------------------- |
+| **Fetch Handler**                 | ✅ Implemented     | 95% - Missing TTFB                  |
+| **Scheduled Handler**             | ✅ Implemented     | 100%                                |
+| **Queue Handler**                 | ✅ Implemented     | 100%                                |
+| **Email Handler**                 | ✅ Implemented     | 100%                                |
+| **Alarm Handler**                 | ✅ Implemented     | 100%                                |
+| **RPC Handler**                   | ❌ Not Implemented | 0%                                  |
+| **Tail Handler**                  | ❌ Not Implemented | 0%                                  |
+| **D1 Database**                   | ✅ Implemented     | 90% - Missing bookmark/region attrs |
+| **KV Namespace**                  | ✅ Implemented     | 100%                                |
+| **R2 Storage**                    | ❌ Not Implemented | 0%                                  |
+| **Cache API**                     | ⚠️ Partial         | 85% - Missing cache_control attrs   |
+| **Queue Producer**                | ✅ Implemented     | 100%                                |
+| **Durable Objects (Fetch/Alarm)** | ✅ Implemented     | 100%                                |
+| **DO Storage (Legacy KV)**        | ✅ Implemented     | 100%                                |
+| **DO Storage (SQL)**              | ❌ Not Implemented | 0%                                  |
+| **Analytics Engine**              | ✅ Implemented     | 100%                                |
+| **Images**                        | ❌ Not Implemented | 0%                                  |
+| **Email Sending**                 | ❌ Not Implemented | 0%                                  |
+| **Rate Limiting**                 | ❌ Not Implemented | 0%                                  |
+| **Browser Rendering**             | ❌ Not Implemented | 0%                                  |
+
+### Priority for Future Implementation
+
+**High Priority:**
+
+1. **R2 Storage** - Major service, heavily used
+2. **DO SQL Storage API** - New official API
+3. **RPC Handler** - RPC calls are increasingly common
+
+**Medium Priority:** 4. **Images Binding** - Used for image processing workloads 5. **Email Sending Operations** - Complete email support 6. **Cache API enhancements** - Add missing attributes
+
+**Low Priority:** 7. **Rate Limiting** - Niche use case 8. **Browser Rendering** - Specialized workload 9. **Tail Handler** - Advanced use case
+
 ## Contributing Guidelines
 
 When adding new instrumentation:
 
 1. **Follow the pattern**: See `src/instrumentation/` for examples
 2. **Use `wrap()` utility**: From `src/wrap.ts` for proxying
-3. **Semantic conventions**: Use `@opentelemetry/semantic-conventions`
-4. **Handle errors**: Always `recordException()` and set error status
-5. **Test in Workers env**: Use vitest-pool-workers
+3. **Use aligned constants**: Import from `src/constants.ts`
+4. **Follow Cloudflare conventions**: Match official attribute naming
+5. **Handle errors**: Always `recordException()` and set error status
+6. **Test in Workers env**: Use vitest-pool-workers
 
 ## Additional Resources
 
@@ -566,3 +810,4 @@ When adding new instrumentation:
 - [Examples](./examples/) - Working code samples
 - [OpenTelemetry JS Docs](https://opentelemetry.io/docs/languages/js/)
 - [Cloudflare Workers Docs](https://developers.cloudflare.com/workers/)
+- [Cloudflare Observability Docs](https://developers.cloudflare.com/workers/observability/)
