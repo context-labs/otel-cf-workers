@@ -212,8 +212,10 @@ export const fetchInstrumentation: HandlerInstrumentation<IncomingRequest, OrPro
 		Object.assign(attributes, gatherRootSpanAttributes(request, 'fetch'))
 		Object.assign(attributes, gatherUserAgentAttributes(request))
 		const method = request.method.toUpperCase()
+		const url = new URL(request.url)
+		const route = url.pathname
 		return {
-			name: `fetchHandler ${method}`,
+			name: `${method} ${route}`,
 			options: {
 				attributes,
 				kind: SpanKind.SERVER,
@@ -268,6 +270,19 @@ export function instrumentClientFetch(
 					if (request.cf) span.setAttributes(gatherOutgoingCfAttributes(request.cf))
 					const response = await Reflect.apply(target, thisArg, [request])
 					span.setAttributes(gatherResponseAttributes(response))
+					span.setAttributes({
+						'http.status_code': response.status,
+						'http.status_text': response.statusText,
+					})
+					// Set span status based on HTTP status code
+					if (response.status >= 400) {
+						span.setStatus({
+							code: SpanStatusCode.ERROR,
+							message: `HTTP ${response.status}: ${response.statusText}`,
+						})
+					} else {
+						span.setStatus({ code: SpanStatusCode.OK })
+					}
 					return response
 				} catch (error: unknown) {
 					span.recordException(error as Exception)
