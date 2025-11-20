@@ -274,6 +274,7 @@ function instrumentRpcHandlerMethod(
 			const doName = carrierDoName || id.name || undefined
 
 			// DEBUG: Log context extraction
+			const carrier = argArray.length > 0 ? argArray[0] : undefined
 			console.log('[DO RPC Server]', {
 				methodName,
 				hasExtractedContext: !!extractedContext,
@@ -282,6 +283,7 @@ function instrumentRpcHandlerMethod(
 				finalDoName: doName,
 				argArrayLength: argArray.length,
 				cleanedArgsLength: cleanedArgs.length,
+				carrierHeaders: carrier ? (carrier as any).headers : undefined,
 			})
 
 			// Build the context: start with extracted parent context (if any), then add config
@@ -310,7 +312,8 @@ function instrumentRpcHandlerMethod(
 
 				const spanName = doName ? `${doName}.${methodName}` : `${attributes['do.id']}.${methodName}`
 
-				return tracer.startActiveSpan(spanName, options, async (span) => {
+				// Use the current context (which includes extracted parent) for the span
+				return tracer.startActiveSpan(spanName, options, api_context.active(), async (span) => {
 					try {
 						const bound = target.bind(thisArg)
 						// Use cleaned args (without context carrier) for the actual method call
