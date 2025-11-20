@@ -1,12 +1,12 @@
 import { SpanKind } from '@opentelemetry/api'
-import { HandlerInstrumentation, InitialSpanInfo, OrPromise } from '../types.js'
+import { HandlerInstrumentation, InitialSpanInfo, OrPromise } from '../types'
 import {
 	ATTR_FAAS_CRON,
 	ATTR_FAAS_TIME,
 	ATTR_FAAS_TRIGGER,
 	FAAS_TRIGGER_VALUE_TIMER,
 } from '@opentelemetry/semantic-conventions/incubating'
-import { ATTR_CLOUDFLARE_SCHEDULED_TIME } from '../constants.js'
+import { ATTR_CLOUDFLARE_SCHEDULED_TIME } from '../constants'
 
 export const scheduledInstrumentation: HandlerInstrumentation<ScheduledController, OrPromise<void>> = {
 	getInitialSpanInfo: function (controller: ScheduledController): InitialSpanInfo {

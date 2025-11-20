@@ -2,23 +2,23 @@ import { context as api_context, Exception, propagation, SpanStatusCode, trace }
 import { Resource, resourceFromAttributes } from '@opentelemetry/resources'
 import { W3CTraceContextPropagator } from '@opentelemetry/core'
 
-import { Initialiser, parseConfig, setConfig, ResolvedConfig } from './config.js'
-import { WorkerTracerProvider } from './provider.js'
-import { Trigger, OrPromise, HandlerInstrumentation, ConfigurationOption } from './types.js'
-import { WorkerLoggerProvider, getLogger } from './logs/provider.js'
-import { unwrap } from './wrap.js'
-import { WorkerTracer } from './tracer.js'
+import { Initialiser, parseConfig, setConfig, ResolvedConfig } from './config'
+import { WorkerTracerProvider } from './provider'
+import { Trigger, OrPromise, HandlerInstrumentation, ConfigurationOption } from './types'
+import { WorkerLoggerProvider, getLogger } from './logs/provider'
+import { unwrap } from './wrap'
+import { WorkerTracer } from './tracer'
 
-import { fetchInstrumentation, instrumentGlobalFetch } from './instrumentation/fetch.js'
-import { instrumentGlobalCache } from './instrumentation/cache.js'
-import { QueueInstrumentation } from './instrumentation/queue.js'
-import { DOClass, instrumentDOClass } from './instrumentation/do.js'
-import { scheduledInstrumentation } from './instrumentation/scheduled.js'
-import { instrumentEnv } from './instrumentation/env.js'
-import { versionAttributes } from './instrumentation/version.js'
-import { PromiseTracker, proxyExecutionContext } from './instrumentation/common.js'
-import { emailInstrumentation } from './instrumentation/email.js'
-import { PACKAGE_VERSION } from './constants.js'
+import { fetchInstrumentation, instrumentGlobalFetch } from './instrumentation/fetch'
+import { instrumentGlobalCache } from './instrumentation/cache'
+import { QueueInstrumentation } from './instrumentation/queue'
+import { DOClass, instrumentDOClass } from './instrumentation/do'
+import { scheduledInstrumentation } from './instrumentation/scheduled'
+import { instrumentEnv } from './instrumentation/env'
+import { versionAttributes } from './instrumentation/version'
+import { PromiseTracker, proxyExecutionContext } from './instrumentation/common'
+import { emailInstrumentation } from './instrumentation/email'
+import { PACKAGE_VERSION } from './constants'
 import { env } from 'cloudflare:workers'
 
 type FetchHandler = ExportedHandlerFetchHandler<unknown, unknown>
@@ -103,7 +103,7 @@ function init(config: ResolvedConfig, serviceConfig: any, propagator: any): void
 
 			// Instrument console if enabled
 			if (config.logs.instrumentation.instrumentConsole) {
-				import('./logs/console.js').then(({ instrumentConsole }) => {
+				import('./logs/console').then(({ instrumentConsole }) => {
 					instrumentConsole()
 				})
 			}

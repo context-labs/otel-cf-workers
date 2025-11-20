@@ -1,6 +1,6 @@
 import { Attributes, SpanKind, SpanOptions, SpanStatusCode, Exception, trace } from '@opentelemetry/api'
 import { SemanticAttributes } from '@opentelemetry/semantic-conventions'
-import { wrap } from '../wrap.js'
+import { wrap } from '../wrap'
 import {
 	ATTR_CLOUDFLARE_BINDING_TYPE,
 	ATTR_DB_SYSTEM_NAME,
@@ -14,7 +14,7 @@ import {
 	ATTR_CLOUDFLARE_D1_RESPONSE_LAST_ROW_ID,
 	ATTR_CLOUDFLARE_D1_RESPONSE_CHANGED_DB,
 	ATTR_CLOUDFLARE_D1_RESPONSE_CHANGES,
-} from '../constants.js'
+} from '../constants'
 
 const dbSystem = 'Cloudflare D1'
 

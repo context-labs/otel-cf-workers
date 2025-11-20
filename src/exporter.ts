@@ -2,8 +2,8 @@ import { ExportResult, ExportResultCode } from '@opentelemetry/core'
 import { OTLPExporterError } from '@opentelemetry/otlp-exporter-base'
 import { JsonTraceSerializer } from '@opentelemetry/otlp-transformer'
 import { SpanExporter } from '@opentelemetry/sdk-trace-base'
-import { unwrap } from './wrap.js'
-import { DEFAULT_OTLP_HEADERS } from './constants.js'
+import { unwrap } from './wrap'
+import { DEFAULT_OTLP_HEADERS } from './constants'
 
 export interface OTLPExporterConfig {
 	url: string

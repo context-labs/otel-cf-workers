@@ -1,5 +1,5 @@
 import { Attributes, SpanKind, SpanOptions, trace } from '@opentelemetry/api'
-import { wrap } from '../wrap.js'
+import { wrap } from '../wrap'
 import {
 	ATTR_CLOUDFLARE_BINDING_TYPE,
 	ATTR_CLOUDFLARE_BINDING_NAME,
@@ -10,7 +10,7 @@ import {
 	ATTR_CLOUDFLARE_IMAGES_RESPONSE_FILENAME,
 	ATTR_CLOUDFLARE_IMAGES_METADATA_KEYS,
 	ATTR_CLOUDFLARE_IMAGES_REQUIRE_SIGNED_URLS,
-} from '../constants.js'
+} from '../constants'
 
 // Note: Since Images binding isn't in @cloudflare/workers-types yet,
 // we'll use generic types and duck-typing detection

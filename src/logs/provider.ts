@@ -1,6 +1,6 @@
 import { Resource } from '@opentelemetry/resources'
-import { Logger, LoggerOptions, LoggerProvider, LogRecordProcessor } from './types.js'
-import { WorkerLogger } from './logger.js'
+import { Logger, LoggerOptions, LoggerProvider, LogRecordProcessor } from './types'
+import { WorkerLogger } from './logger'
 
 // Global logger provider singleton
 let globalLoggerProvider: LoggerProvider | undefined

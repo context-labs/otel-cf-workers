@@ -1,8 +1,8 @@
 import { context as api_context } from '@opentelemetry/api'
 import { Resource } from '@opentelemetry/resources'
-import { Logger, LogAttributes, LogRecordProcessor, LogRecord } from './types.js'
-import { LogRecordImpl } from './logrecord.js'
-import { SEVERITY_NUMBERS } from '../constants.js'
+import { Logger, LogAttributes, LogRecordProcessor, LogRecord } from './types'
+import { LogRecordImpl } from './logrecord'
+import { SEVERITY_NUMBERS } from '../constants'
 
 export class WorkerLogger implements Logger {
 	private readonly processors: LogRecordProcessor[]

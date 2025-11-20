@@ -1,9 +1,9 @@
 import { Attributes, Context, SpanOptions, TextMapPropagator, Span } from '@opentelemetry/api'
 import { ReadableSpan, Sampler, SpanExporter, SpanProcessor } from '@opentelemetry/sdk-trace-base'
-import { OTLPExporterConfig } from './exporter.js'
-import { FetchHandlerConfig, FetcherConfig } from './instrumentation/fetch.js'
-import { TailSampleFn } from './sampling.js'
-import { LogTransport, LogRecordProcessor, BatchConfig as LogBatchConfig } from './logs/types.js'
+import { OTLPExporterConfig } from './exporter'
+import { FetchHandlerConfig, FetcherConfig } from './instrumentation/fetch'
+import { TailSampleFn } from './sampling'
+import { LogTransport, LogRecordProcessor, BatchConfig as LogBatchConfig } from './logs/types'
 
 export type OrPromise<T extends any> = T | Promise<T>
 

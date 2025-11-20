@@ -10,12 +10,12 @@ import {
 	Exception,
 	SpanStatusCode,
 } from '@opentelemetry/api'
-import { getActiveConfig } from '../config.js'
-import { wrap } from '../wrap.js'
-import { HandlerInstrumentation, OrPromise, ResolvedTraceConfig } from '../types.js'
+import { getActiveConfig } from '../config'
+import { wrap } from '../wrap'
+import { HandlerInstrumentation, OrPromise, ResolvedTraceConfig } from '../types'
 import { ReadableSpan } from '@opentelemetry/sdk-trace-base'
-import { gatherUserAgentAttributes } from './user-agent.js'
-import { gatherRootSpanAttributes } from './universal-attributes.js'
+import { gatherUserAgentAttributes } from './user-agent'
+import { gatherRootSpanAttributes } from './universal-attributes'
 import {
 	ATTR_CLOUDFLARE_ASN,
 	ATTR_CLOUDFLARE_VERIFIED_BOT_CATEGORY,
@@ -29,7 +29,7 @@ import {
 	ATTR_HTTP_REQUEST_HEADER_ACCEPT_LANGUAGE,
 	ATTR_HTTP_REQUEST_HEADER_CONTENT_TYPE,
 	ATTR_HTTP_REQUEST_HEADER_CONTENT_LENGTH,
-} from '../constants.js'
+} from '../constants'
 
 type IncomingRequest = Parameters<ExportedHandlerFetchHandler>[0]
 

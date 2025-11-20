@@ -1,6 +1,6 @@
 import { Attributes, SpanKind, SpanOptions, trace } from '@opentelemetry/api'
 import { SemanticAttributes } from '@opentelemetry/semantic-conventions'
-import { wrap } from '../wrap.js'
+import { wrap } from '../wrap'
 import {
 	ATTR_CLOUDFLARE_BINDING_TYPE,
 	ATTR_CLOUDFLARE_BINDING_NAME,
@@ -21,7 +21,7 @@ import {
 	ATTR_CLOUDFLARE_KV_RESPONSE_LIST_COMPLETE,
 	ATTR_CLOUDFLARE_KV_RESPONSE_CURSOR,
 	ATTR_CLOUDFLARE_KV_RESPONSE_METADATA,
-} from '../constants.js'
+} from '../constants'
 
 type ExtraAttributeFn = (argArray: any[], result: any) => Attributes
 

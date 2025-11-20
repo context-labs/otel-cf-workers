@@ -1,13 +1,13 @@
-import { isProxyable, wrap } from '../wrap.js'
-import { instrumentDOBinding } from './do.js'
-import { instrumentKV } from './kv.js'
-import { instrumentQueueSender } from './queue.js'
-import { instrumentServiceBinding } from './service.js'
+import { isProxyable, wrap } from '../wrap'
+import { instrumentDOBinding } from './do'
+import { instrumentKV } from './kv'
+import { instrumentQueueSender } from './queue'
+import { instrumentServiceBinding } from './service'
 import { instrumentD1 } from './d1'
-import { instrumentAnalyticsEngineDataset } from './analytics-engine.js'
-import { instrumentR2Bucket } from './r2.js'
-import { instrumentImagesBinding } from './images.js'
-import { instrumentRateLimitBinding } from './rate-limit.js'
+import { instrumentAnalyticsEngineDataset } from './analytics-engine'
+import { instrumentR2Bucket } from './r2'
+import { instrumentImagesBinding } from './images'
+import { instrumentRateLimitBinding } from './rate-limit'
 
 const isJSRPC = (item?: unknown): item is Service => {
 	// @ts-expect-error The point of RPC types is to block non-existent properties, but that's the goal here

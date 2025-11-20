@@ -1,19 +1,19 @@
 import { context as api_context, trace, SpanOptions, SpanKind, Exception, SpanStatusCode } from '@opentelemetry/api'
 import { SemanticAttributes } from '@opentelemetry/semantic-conventions'
-import { passthroughGet, unwrap, wrap } from '../wrap.js'
+import { passthroughGet, unwrap, wrap } from '../wrap'
 import {
 	getParentContextFromHeaders,
 	gatherIncomingCfAttributes,
 	gatherRequestAttributes,
 	gatherResponseAttributes,
 	instrumentClientFetch,
-} from './fetch.js'
-import { instrumentEnv } from './env.js'
-import { Initialiser, setConfig } from '../config.js'
-import { instrumentStorage } from './do-storage.js'
-import { DOConstructorTrigger } from '../types.js'
-import { ATTR_CLOUDFLARE_JSRPC_METHOD, ATTR_RPC_SYSTEM, ATTR_RPC_SERVICE, ATTR_RPC_METHOD } from '../constants.js'
-import { injectRpcContext, extractAndRemoveRpcContext } from './rpc-context.js'
+} from './fetch'
+import { instrumentEnv } from './env'
+import { Initialiser, setConfig } from '../config'
+import { instrumentStorage } from './do-storage'
+import { DOConstructorTrigger } from '../types'
+import { ATTR_CLOUDFLARE_JSRPC_METHOD, ATTR_RPC_SYSTEM, ATTR_RPC_SERVICE, ATTR_RPC_METHOD } from '../constants'
+import { injectRpcContext, extractAndRemoveRpcContext } from './rpc-context'
 
 import { DurableObject as DurableObjectClass } from 'cloudflare:workers'
 

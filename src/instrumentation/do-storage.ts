@@ -1,6 +1,6 @@
 import { Attributes, SpanKind, SpanOptions, trace } from '@opentelemetry/api'
-import { wrap } from '../wrap.js'
-import { Overloads } from './common.js'
+import { wrap } from '../wrap'
+import { Overloads } from './common'
 import {
 	ATTR_DB_SYSTEM_NAME,
 	ATTR_DB_OPERATION_NAME,
@@ -21,7 +21,7 @@ import {
 	ATTR_CLOUDFLARE_DO_SQL_RESPONSE_ROWS_WRITTEN,
 	ATTR_DB_QUERY_TEXT,
 	ATTR_DB_OPERATION_BATCH_SIZE,
-} from '../constants.js'
+} from '../constants'
 
 type ExtraAttributeFn = (argArray: any[], result: any) => Attributes
 

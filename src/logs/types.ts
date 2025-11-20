@@ -2,7 +2,7 @@ import { Context, HrTime } from '@opentelemetry/api'
 import { InstrumentationScope } from '@opentelemetry/core'
 import { Resource } from '@opentelemetry/resources'
 import { ExportResult } from '@opentelemetry/core'
-import { SeverityNumber } from '../constants.js'
+import { SeverityNumber } from '../constants'
 
 export type LogBody = string | Record<string, any>
 

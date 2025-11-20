@@ -14,9 +14,9 @@ import { sanitizeAttributes } from '@opentelemetry/core'
 import { Resource } from '@opentelemetry/resources'
 import { SpanProcessor, RandomIdGenerator, ReadableSpan, SamplingDecision } from '@opentelemetry/sdk-trace-base'
 
-import { SpanImpl } from './span.js'
-import { getActiveConfig } from './config.js'
-import { TraceFlushableSpanProcessor } from './types.js'
+import { SpanImpl } from './span'
+import { getActiveConfig } from './config'
+import { TraceFlushableSpanProcessor } from './types'
 
 enum NewTraceFlags {
 	RANDOM_TRACE_ID_SET = 2,

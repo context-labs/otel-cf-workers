@@ -1,6 +1,6 @@
 import { Context } from '@opentelemetry/api'
 import { ExportResultCode } from '@opentelemetry/core'
-import { LogRecordProcessor, LogTransport, ReadableLogRecord, BatchConfig } from './types.js'
+import { LogRecordProcessor, LogTransport, ReadableLogRecord, BatchConfig } from './types'
 
 /**
  * Immediate Log Record Processor

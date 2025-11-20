@@ -10,7 +10,7 @@ import {
 	ATTR_USER_AGENT_DEVICE_TYPE,
 	ATTR_USER_AGENT_DEVICE_VENDOR,
 	ATTR_USER_AGENT_DEVICE_MODEL,
-} from '../constants.js'
+} from '../constants'
 
 function isValidAttributeValue(value: unknown): value is AttributeValue {
 	return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'

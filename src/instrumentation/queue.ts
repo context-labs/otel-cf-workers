@@ -1,8 +1,8 @@
 import { trace, SpanKind, Attributes, Span } from '@opentelemetry/api'
-import { unwrap, wrap } from '../wrap.js'
-import { HandlerInstrumentation, InitialSpanInfo, OrPromise } from '../types.js'
+import { unwrap, wrap } from '../wrap'
+import { HandlerInstrumentation, InitialSpanInfo, OrPromise } from '../types'
 import { ATTR_FAAS_TRIGGER, FAAS_TRIGGER_VALUE_PUBSUB } from '@opentelemetry/semantic-conventions/incubating'
-import { ATTR_CLOUDFLARE_QUEUE_NAME, ATTR_CLOUDFLARE_QUEUE_BATCH_SIZE } from '../constants.js'
+import { ATTR_CLOUDFLARE_QUEUE_NAME, ATTR_CLOUDFLARE_QUEUE_BATCH_SIZE } from '../constants'
 
 type QueueHandler = ExportedHandlerQueueHandler<unknown, unknown>
 export type QueueHandlerArgs = Parameters<QueueHandler>

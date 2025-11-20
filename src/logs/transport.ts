@@ -6,9 +6,9 @@ import {
 	ExportResultCallback,
 	OTLPTransportConfig,
 	ConsoleTransportConfig,
-} from './types.js'
-import { unwrap } from '../wrap.js'
-import { DEFAULT_OTLP_HEADERS } from '../constants.js'
+} from './types'
+import { unwrap } from '../wrap'
+import { DEFAULT_OTLP_HEADERS } from '../constants'
 
 /**
  * OTLP HTTP/JSON Transport for Logs

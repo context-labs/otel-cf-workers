@@ -1,5 +1,5 @@
 import { Attributes, SpanKind, SpanOptions, trace } from '@opentelemetry/api'
-import { wrap } from '../wrap.js'
+import { wrap } from '../wrap'
 import {
 	ATTR_CLOUDFLARE_BINDING_TYPE,
 	ATTR_CLOUDFLARE_BINDING_NAME,
@@ -47,7 +47,7 @@ import {
 	ATTR_CLOUDFLARE_R2_LIST_DELIMITED_PREFIXES_COUNT,
 	ATTR_CLOUDFLARE_R2_LIST_CURSOR,
 	ATTR_CLOUDFLARE_R2_MULTIPART_UPLOAD_ID,
-} from '../constants.js'
+} from '../constants'
 
 const dbSystem = 'Cloudflare R2'
 

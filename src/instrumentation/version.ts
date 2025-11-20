@@ -1,4 +1,4 @@
-import { isVersionMetadata } from './env.js'
+import { isVersionMetadata } from './env'
 
 export function versionAttributes(env: unknown): Record<string, string | undefined> {
 	const attributes = {} as Record<string, string | undefined>

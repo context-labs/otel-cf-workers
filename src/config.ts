@@ -9,13 +9,13 @@ import {
 	WorkerOtelConfig,
 	ResolvedLogsConfig,
 	LogsConfig,
-} from './types.js'
+} from './types'
 import { ReadableSpan, Sampler, SpanExporter } from '@opentelemetry/sdk-trace-base'
 
-import { OTLPExporter } from './exporter.js'
-import { multiTailSampler, isHeadSampled, isRootErrorSpan, createSampler } from './sampling.js'
-import { BatchTraceSpanProcessor } from './spanprocessor.js'
-import { MultiTransportLogRecordProcessor } from './logs/logprocessor.js'
+import { OTLPExporter } from './exporter'
+import { multiTailSampler, isHeadSampled, isRootErrorSpan, createSampler } from './sampling'
+import { BatchTraceSpanProcessor } from './spanprocessor'
+import { MultiTransportLogRecordProcessor } from './logs/logprocessor'
 
 const traceConfigSymbol = Symbol('Otel Workers Tracing Configuration')
 const logsConfigSymbol = Symbol('Otel Workers Logs Configuration')

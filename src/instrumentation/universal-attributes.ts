@@ -10,7 +10,7 @@ import {
 	ATTR_TELEMETRY_SDK_NAME,
 	ATTR_TELEMETRY_SDK_LANGUAGE,
 	PACKAGE_NAME,
-} from '../constants.js'
+} from '../constants'
 
 /**
  * Gather universal attributes that should be present on all spans

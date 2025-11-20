@@ -1,6 +1,6 @@
 import { Attributes, SpanKind, SpanOptions, trace } from '@opentelemetry/api'
 import { SemanticAttributes } from '@opentelemetry/semantic-conventions'
-import { wrap } from '../wrap.js'
+import { wrap } from '../wrap'
 
 type ExtraAttributeFn = (argArray: any[], result: any) => Attributes
 

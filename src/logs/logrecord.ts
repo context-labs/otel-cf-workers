@@ -1,8 +1,8 @@
 import { HrTime, TimeInput, trace } from '@opentelemetry/api'
 import { InstrumentationScope, sanitizeAttributes } from '@opentelemetry/core'
 import { Resource } from '@opentelemetry/resources'
-import { LogAttributes, LogBody, ReadableLogRecord } from './types.js'
-import { SeverityNumber } from '../constants.js'
+import { LogAttributes, LogBody, ReadableLogRecord } from './types'
+import { SeverityNumber } from '../constants'
 
 function millisToHr(millis: number): HrTime {
 	return [Math.trunc(millis / 1000), (millis % 1000) * 1e6]

@@ -3,8 +3,8 @@ import { context, trace, Tracer, TracerOptions, TracerProvider } from '@opentele
 import { SpanProcessor } from '@opentelemetry/sdk-trace-base'
 import { Resource } from '@opentelemetry/resources'
 
-import { AsyncLocalStorageContextManager } from './context.js'
-import { WorkerTracer } from './tracer.js'
+import { AsyncLocalStorageContextManager } from './context'
+import { WorkerTracer } from './tracer'
 
 /**
  * Register this TracerProvider for use with the OpenTelemetry API.

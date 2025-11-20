@@ -1,5 +1,5 @@
-import { getLogger } from './provider.js'
-import { SEVERITY_NUMBERS } from '../constants.js'
+import { getLogger } from './provider'
+import { SEVERITY_NUMBERS } from '../constants'
 
 const severityMap = {
 	debug: SEVERITY_NUMBERS.DEBUG,

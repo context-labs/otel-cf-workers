@@ -1,23 +1,23 @@
-export * from './buffer.js'
-export * from './sampling.js'
-export * from './sdk.js'
-export * from './span.js'
-export * from './exporter.js'
-export * from './multiexporter.js'
-export * from './spanprocessor.js'
-export { withNextSpan } from './tracer.js'
-export type * from './types.js'
+export * from './buffer'
+export * from './sampling'
+export * from './sdk'
+export * from './span'
+export * from './exporter'
+export * from './multiexporter'
+export * from './spanprocessor'
+export { withNextSpan } from './tracer'
+export type * from './types'
 
 // Logs exports
-export { getLogger, WorkerLoggerProvider, setGlobalLoggerProvider, getGlobalLoggerProvider } from './logs/provider.js'
-export { WorkerLogger } from './logs/logger.js'
-export { OTLPTransport, ConsoleTransport } from './logs/transport.js'
+export { getLogger, WorkerLoggerProvider, setGlobalLoggerProvider, getGlobalLoggerProvider } from './logs/provider'
+export { WorkerLogger } from './logs/logger'
+export { OTLPTransport, ConsoleTransport } from './logs/transport'
 export {
 	createLogProcessor,
 	ImmediateLogRecordProcessor,
 	BatchSizeLogRecordProcessor,
 	MultiTransportLogRecordProcessor,
-} from './logs/logprocessor.js'
-export type * from './logs/types.js'
-export { SEVERITY_NUMBERS } from './constants.js'
-export type { SeverityNumber } from './constants.js'
+} from './logs/logprocessor'
+export type * from './logs/types'
+export { SEVERITY_NUMBERS } from './constants'
+export type { SeverityNumber } from './constants'

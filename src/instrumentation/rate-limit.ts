@@ -1,12 +1,12 @@
 import { Attributes, SpanKind, SpanOptions, trace } from '@opentelemetry/api'
-import { wrap } from '../wrap.js'
+import { wrap } from '../wrap'
 import {
 	ATTR_CLOUDFLARE_BINDING_TYPE,
 	ATTR_CLOUDFLARE_BINDING_NAME,
 	ATTR_CLOUDFLARE_RATE_LIMIT_KEY,
 	ATTR_CLOUDFLARE_RATE_LIMIT_ALLOWED,
 	ATTR_CLOUDFLARE_RATE_LIMIT_SUCCESS,
-} from '../constants.js'
+} from '../constants'
 
 // Note: Rate Limiting binding types - using duck typing since not in @cloudflare/workers-types
 type RateLimitBinding = {

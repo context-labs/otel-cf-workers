@@ -5,7 +5,7 @@ import {
 	ATTR_RPC_MESSAGE_ID,
 } from '@opentelemetry/semantic-conventions/incubating'
 import { HandlerInstrumentation, OrPromise } from '../types'
-import { ATTR_CLOUDFLARE_EMAIL_FROM, ATTR_CLOUDFLARE_EMAIL_TO, ATTR_CLOUDFLARE_EMAIL_SIZE } from '../constants.js'
+import { ATTR_CLOUDFLARE_EMAIL_FROM, ATTR_CLOUDFLARE_EMAIL_TO, ATTR_CLOUDFLARE_EMAIL_SIZE } from '../constants'
 
 /**
  * Converts the message headers into a record ready to be injected
