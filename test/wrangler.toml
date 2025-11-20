@@ -1,0 +1,32 @@
+name = "otel-cf-workers-test"
+main = "test-worker.ts"
+compatibility_date = "2025-11-19"
+compatibility_flags = ["nodejs_compat"]
+
+# KV namespace for testing
+kv_namespaces = [
+  { binding = "TEST_KV", id = "test-kv-id" }
+]
+
+# R2 bucket for testing
+r2_buckets = [
+  { binding = "MY_BUCKET", bucket_name = "test-bucket" }
+]
+
+# Images binding for testing (using a placeholder binding name)
+# Note: Images binding might require actual Cloudflare account setup
+# For local testing, this will be mocked by vitest-pool-workers
+
+# Durable Objects for testing
+[durable_objects]
+bindings = [
+  { name = "TEST_DO", class_name = "InstrumentedTestDO" }
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["InstrumentedTestDO"]
+
+# Version metadata
+[version_metadata]
+binding = "CF_VERSION_METADATA"

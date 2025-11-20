@@ -271,6 +271,15 @@ export const ATTR_CLOUDFLARE_RATE_LIMIT_ALLOWED = 'cloudflare.rate_limit.allowed
 export const ATTR_CLOUDFLARE_RATE_LIMIT_SUCCESS = 'cloudflare.rate_limit.success'
 
 // ============================================================================
+// RPC Attributes
+// ============================================================================
+
+export const ATTR_CLOUDFLARE_JSRPC_METHOD = 'cloudflare.jsrpc.method'
+export const ATTR_RPC_SYSTEM = 'rpc.system'
+export const ATTR_RPC_SERVICE = 'rpc.service'
+export const ATTR_RPC_METHOD = 'rpc.method'
+
+// ============================================================================
 // OTLP Exporter Constants (shared by traces and logs)
 // ============================================================================
 

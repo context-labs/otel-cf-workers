@@ -79,4 +79,5 @@ export interface ConsoleTransportConfig {
 	pretty?: boolean
 	colors?: boolean
 	includeTimestamp?: boolean
+	transformLog?: (logRecord: ReadableLogRecord) => ReadableLogRecord
 }

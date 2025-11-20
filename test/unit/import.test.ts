@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 
-import * as otelCfWorkers from '..'
-import { instrument } from '..'
+import * as otelCfWorkers from '../..'
+import { instrument } from '../..'
 
 it('can import in esm', () => {
 	expect(otelCfWorkers).toBeDefined()

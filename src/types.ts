@@ -132,4 +132,5 @@ export type Trigger =
 	| ScheduledController
 	| DOConstructorTrigger
 	| 'do-alarm'
+	| 'do-rpc'
 	| ForwardableEmailMessage

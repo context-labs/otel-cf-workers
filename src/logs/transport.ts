@@ -197,6 +197,7 @@ export class ConsoleTransport implements LogTransport {
 			pretty: options.pretty ?? true,
 			colors: options.colors ?? false,
 			includeTimestamp: options.includeTimestamp ?? true,
+			transformLog: options.transformLog ?? ((l) => l),
 		}
 	}
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 
-import { isWrapped, isProxyable, wrap, unwrap, passthroughGet } from '../src/wrap'
+import { isWrapped, isProxyable, wrap, unwrap, passthroughGet } from '../../src/wrap'
 
 describe('wrap', () => {
 	it('isWrapped', () => {

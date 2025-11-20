@@ -12,6 +12,7 @@ import { instrumentEnv } from './env.js'
 import { Initialiser, setConfig } from '../config.js'
 import { instrumentStorage } from './do-storage.js'
 import { DOConstructorTrigger } from '../types.js'
+import { ATTR_CLOUDFLARE_JSRPC_METHOD, ATTR_RPC_SYSTEM, ATTR_RPC_SERVICE, ATTR_RPC_METHOD } from '../constants.js'
 
 import { DurableObject as DurableObjectClass } from 'cloudflare:workers'
 
@@ -19,6 +20,47 @@ type DO = DurableObject | DurableObjectClass
 type FetchFn = DurableObject['fetch']
 type AlarmFn = DurableObject['alarm']
 type Env = Record<string, unknown>
+
+function instrumentRpcMethod(method: Function, methodName: string, nsName: string, stubId: DurableObjectId): Function {
+	const tracer = trace.getTracer('do_rpc_client')
+
+	const rpcHandler: ProxyHandler<Function> = {
+		apply: async (target, thisArg, argArray) => {
+			const attributes = {
+				[ATTR_RPC_SYSTEM]: 'cloudflare_rpc',
+				[ATTR_RPC_SERVICE]: nsName,
+				[ATTR_RPC_METHOD]: methodName,
+				[ATTR_CLOUDFLARE_JSRPC_METHOD]: methodName,
+				'do.namespace': nsName,
+				'do.id': stubId.toString(),
+				'do.id.name': stubId.name,
+			}
+
+			const options: SpanOptions = {
+				kind: SpanKind.CLIENT,
+				attributes,
+			}
+
+			const spanName = `RPC ${nsName}.${methodName}`
+
+			return tracer.startActiveSpan(spanName, options, async (span) => {
+				try {
+					const result = await Reflect.apply(target, thisArg, argArray)
+					span.setStatus({ code: SpanStatusCode.OK })
+					return result
+				} catch (error) {
+					span.recordException(error as Exception)
+					span.setStatus({ code: SpanStatusCode.ERROR })
+					throw error
+				} finally {
+					span.end()
+				}
+			})
+		},
+	}
+
+	return wrap(method, rpcHandler)
+}
 
 function instrumentBindingStub(stub: DurableObjectStub, nsName: string): DurableObjectStub {
 	const stubHandler: ProxyHandler<typeof stub> = {
@@ -33,7 +75,16 @@ function instrumentBindingStub(stub: DurableObjectStub, nsName: string): Durable
 				}
 				return instrumentClientFetch(fetcher, () => ({ includeTraceContext: true }), attrs)
 			} else {
-				return passthroughGet(target, prop, receiver)
+				// Get the property value
+				const value = passthroughGet(target, prop, receiver)
+
+				// Check if it's an RPC method (function from the DO class)
+				if (typeof value === 'function' && typeof prop === 'string') {
+					// Instrument RPC method calls
+					return instrumentRpcMethod(value, prop, nsName, target.id)
+				}
+
+				return value
 			}
 		},
 	}
@@ -176,20 +227,58 @@ function instrumentAlarmFn(alarmFn: AlarmFn, initialiser: Initialiser, env: Env,
 	return wrap(alarmFn, alarmHandler)
 }
 
-function instrumentAnyFn(fn: () => any, initialiser: Initialiser, env: Env, _id: DurableObjectId) {
-	if (!fn) return undefined
+function instrumentRpcHandlerMethod(
+	fn: Function,
+	methodName: string,
+	initialiser: Initialiser,
+	env: Env,
+	id: DurableObjectId,
+): Function {
+	if (!fn) return fn
 
-	const fnHandler: ProxyHandler<() => any> = {
-		async apply(target, thisArg, argArray: []) {
+	const fnHandler: ProxyHandler<Function> = {
+		async apply(target, thisArg, argArray) {
 			thisArg = unwrap(thisArg)
-			const config = initialiser(env, 'do-alarm')
+			const config = initialiser(env, 'do-rpc')
 			const context = setConfig(config)
-			try {
-				const bound = target.bind(unwrap(thisArg))
-				return await api_context.with(context, () => bound.apply(thisArg, argArray), undefined)
-			} catch (error) {
-				throw error
+
+			const tracer = trace.getTracer('do_rpc_handler')
+			const doName = id.name || id.toString()
+
+			const executeRpc = async () => {
+				const attributes = {
+					[ATTR_RPC_SYSTEM]: 'cloudflare_rpc',
+					[ATTR_RPC_METHOD]: methodName,
+					[ATTR_CLOUDFLARE_JSRPC_METHOD]: methodName,
+					[SemanticAttributes.FAAS_TRIGGER]: 'rpc',
+					'do.id': id.toString(),
+					'do.name': id.name,
+				}
+
+				const options: SpanOptions = {
+					kind: SpanKind.SERVER,
+					attributes,
+				}
+
+				const spanName = `Durable Object RPC ${doName}.${methodName}`
+
+				return tracer.startActiveSpan(spanName, options, async (span) => {
+					try {
+						const bound = target.bind(thisArg)
+						const result = await bound.apply(thisArg, argArray)
+						span.setStatus({ code: SpanStatusCode.OK })
+						return result
+					} catch (error) {
+						span.recordException(error as Exception)
+						span.setStatus({ code: SpanStatusCode.ERROR })
+						throw error
+					} finally {
+						span.end()
+					}
+				})
 			}
+
+			return await api_context.with(context, executeRpc)
 		},
 	}
 	return wrap(fn, fnHandler)
@@ -216,9 +305,10 @@ function instrumentDurableObject(
 				return instrumentAlarmFn(alarmFn, initialiser, env, state.id)
 			} else {
 				const result = Reflect.get(target, prop)
-				if (typeof result === 'function') {
+				if (typeof result === 'function' && typeof prop === 'string') {
 					result.bind(doObj)
-					return instrumentAnyFn(result, initialiser, env, state.id)
+					// Instrument as RPC handler method (server-side)
+					return instrumentRpcHandlerMethod(result, prop, initialiser, env, state.id)
 				}
 				return result
 			}
