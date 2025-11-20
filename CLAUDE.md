@@ -95,19 +95,23 @@ src/
 #### Cloudflare Bindings
 
 - ✅ **KV** - get, put, delete, list, getWithMetadata
-- ✅ **Queue** - Producer send operations
-- ✅ **Durable Objects** - Stub fetch calls
+- ✅ **Queue** - Producer send operations (send, sendBatch)
+- ✅ **Durable Objects** - Stub fetch calls AND RPC method calls (fully instrumented)
 - ✅ **D1** - prepare, exec, batch, all, run, first, raw
-- ✅ **Service Bindings** - Worker-to-worker calls
+- ✅ **Service Bindings** - Worker-to-worker RPC calls
 - ✅ **Analytics Engine** - writeDataPoint
-- ✅ **Durable Object Storage** - get, put, delete, list, alarm methods
+- ✅ **R2** - head, get, put, delete, list, createMultipartUpload, resumeMultipartUpload
+- ✅ **Images** - get, list, delete (basic implementation)
+- ✅ **Rate Limiting** - limit operation
+- ✅ **Durable Object Storage (KV API)** - get, put, delete, list, getAlarm, setAlarm, deleteAlarm
+- ✅ **Durable Object Storage (SQL API)** - sql.exec() with cursor instrumentation
 
 ### ❌ Not Implemented
 
 #### OpenTelemetry APIs
 
-- ❌ **Metrics API** - Only tracing is supported
-- ❌ **Logs API** - No structured logging
+- ✅ **Logs API** - IMPLEMENTED! Structured logging with OTLP export and console instrumentation
+- ❌ **Metrics API** - Only tracing and logging are supported
 - ❌ **Baggage API** - Can be added via custom propagators
 
 #### Triggers
@@ -117,19 +121,26 @@ src/
 
 #### Cloudflare Modules
 
-- ❌ `cloudflare:email` module
+- ❌ `cloudflare:email` module (handler is instrumented, but not the module)
 - ❌ `cloudflare:sockets` module
 
 #### Bindings
 
-- ❌ **R2** - Object storage
 - ❌ **Browser Rendering** - Puppeteer API
 - ❌ **Workers AI** - AI model inference
-- ❌ **Email Sending** - Outbound email
+- ❌ **Email Sending** - Outbound email (receiving via handler.email IS instrumented)
 - ❌ **mTLS** - Mutual TLS bindings
 - ❌ **Vectorize** - Vector database
 - ❌ **Hyperdrive** - Database connection pooling
 - ❌ **Workers for Platforms Dispatch** - Multi-tenant dispatch
+
+#### Durable Object SQL Storage (Partial)
+
+- ❌ **sql.prepare()** - SQL prepared statements not instrumented (returns `SqlStorageStatement`)
+- ❌ **sql.ingest()** - Bulk data ingest not instrumented (returns `SqlStorageIngestResult`)
+- ❌ **sql.databaseSize** - Database size getter property not instrumented
+- ✅ **sql.exec()** - FULLY instrumented with automatic cursor handling
+- ℹ️ **transactionSync()** - Transaction wrapper not separately instrumented, but operations inside transactions ARE instrumented
 
 ## Important Limitations
 
@@ -152,17 +163,17 @@ The clock only updates on I/O operations (fetch, KV reads, etc.). This is a **ru
 
 ### 2. RPC-Style Durable Object Calls
 
-As of v1.0.0-rc.52, **RPC-style Durable Object method calls are NOT auto-instrumented**.
+**✅ FULLY INSTRUMENTED** - RPC-style Durable Object method calls are fully instrumented with automatic trace context propagation.
 
 ```typescript
-// ❌ NOT instrumented (RPC style)
+// ✅ Instrumented (RPC style with trace propagation)
 const result = await stub.someMethod(arg1, arg2)
 
 // ✅ Instrumented (fetch style)
 const response = await stub.fetch(request)
 ```
 
-Classic `fetch()` calls to DOs work perfectly. Direct RPC method calls require manual instrumentation.
+Both RPC method calls and classic `fetch()` calls are instrumented. The library automatically injects trace context as the first argument and the DO handler extracts it server-side.
 
 ### 3. Build Requirements
 
@@ -372,6 +383,90 @@ interface SamplingConfig {
 tailSampler: multiTailSampler([isHeadSampled, isRootErrorSpan])
 ```
 
+## Logging Support
+
+This library includes **full structured logging support** with OTLP export and console instrumentation.
+
+### Basic Logging Usage
+
+```typescript
+import { instrument, ResolveConfigFn } from '@inference-net/otel-cf-workers'
+import { logs } from '@opentelemetry/api-logs'
+
+const config: ResolveConfigFn = (env: Env) => {
+	return {
+		exporter: {
+			url: 'https://api.honeycomb.io/v1/logs', // Logs endpoint
+			headers: { 'x-honeycomb-team': env.HONEYCOMB_API_KEY },
+		},
+		service: { name: 'my-worker' },
+		logs: {
+			level: 'info', // trace, debug, info, warn, error
+			instrumentation: {
+				instrumentConsole: true, // Automatically capture console.log/warn/error
+			},
+		},
+	}
+}
+
+// Use the logger
+const logger = logs.getLogger('my-component')
+logger.emit({
+	severityText: 'INFO',
+	body: 'User logged in',
+	attributes: {
+		userId: '123',
+		email: 'user@example.com',
+	},
+})
+
+// Or use console (if instrumentConsole: true)
+console.log('User logged in', { userId: '123' })
+console.warn('Rate limit approaching')
+console.error('Failed to process payment', { error: err.message })
+```
+
+### Log Configuration
+
+```typescript
+interface LogsConfig {
+	level?: 'trace' | 'debug' | 'info' | 'warn' | 'error' // Minimum log level (default: 'info')
+	instrumentation?: {
+		instrumentConsole?: boolean // Capture console.log/warn/error (default: false)
+	}
+}
+```
+
+### Console Instrumentation
+
+When `instrumentConsole: true`, the library automatically:
+
+- Captures `console.log()` → INFO level
+- Captures `console.warn()` → WARN level
+- Captures `console.error()` → ERROR level
+- Preserves original console behavior (logs still appear in console)
+- Attaches trace context (traceId, spanId) to log records
+- Exports logs to the same OTLP endpoint as traces
+
+### Trace-Log Correlation
+
+Logs emitted within an active span automatically include trace context:
+
+```typescript
+const tracer = trace.getTracer('my-tracer')
+const logger = logs.getLogger('my-component')
+
+await tracer.startActiveSpan('process-order', async (span) => {
+	logger.emit({
+		severityText: 'INFO',
+		body: 'Processing order',
+		attributes: { orderId: '456' },
+	})
+	// Log record will include traceId and spanId from the active span
+	span.end()
+})
+```
+
 ## Instrumentation Details
 
 ### KV Operations
@@ -500,20 +595,25 @@ instrumentation: {
 }
 ```
 
-### Issue: RPC calls not traced
+### Issue: SQL exec() spans for DDL statements
 
-**Cause**: RPC-style Durable Object calls aren't auto-instrumented yet.
-
-**Solution**: Use fetch-style calls or add manual spans:
+**No action needed!** DDL statements (CREATE, DROP, ALTER) and multi-statement queries are automatically handled:
 
 ```typescript
-// Manual workaround:
-await tracer.startActiveSpan('DO RPC call', async (span) => {
-	const result = await stub.rpcMethod(args)
-	span.end()
-	return result
-})
+// ✅ Works automatically - span ends immediately
+this.ctx.storage.sql.exec(`
+  CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY);
+  CREATE INDEX IF NOT EXISTS idx_id ON users(id);
+`)
+
+// ✅ For SELECT queries, consume the cursor to capture row counts
+const rows = [...this.ctx.storage.sql.exec('SELECT * FROM users')]
+
+// ✅ Also works with toArray()
+const rows = this.ctx.storage.sql.exec('SELECT * FROM users').toArray()
 ```
+
+The library uses a microtask to automatically end spans for cursors that aren't iterated (common for DDL), while still capturing metrics when cursors ARE consumed.
 
 ### Issue: Sensitive data in spans
 
@@ -594,84 +694,98 @@ yarn ci             # Full CI workflow (clean + build + check)
 ### ❌ Not a Good Fit
 
 - Accurate CPU timing measurement (runtime limitation)
-- Metrics/logs collection (traces only)
-- Applications using R2, AI, Vectorize heavily (not instrumented yet)
+- Metrics collection (only traces and logs are supported)
+- Applications using AI, Vectorize, Hyperdrive heavily (not instrumented)
 - CommonJS projects (ESM only as of v1.0.0-rc.52)
 
 ## Missing Instrumentation vs. Cloudflare Official
 
 Below is a comprehensive comparison of what Cloudflare's official Workers observability supports that this library does NOT yet implement.
 
+### ✅ Recently Implemented Bindings
+
+#### **R2 Object Storage** (✅ FULLY IMPLEMENTED)
+
+**Operations Implemented:**
+
+- ✅ `head` - Object metadata with full response attributes
+- ✅ `get` - Object retrieval with range/conditional requests
+- ✅ `put` - Object upload with checksums/metadata/storage class
+- ✅ `list` - Bucket listing with pagination
+- ✅ `delete` - Single/batch deletion
+- ✅ `createMultipartUpload` - Multipart upload initiation
+- ✅ `resumeMultipartUpload` - Resume multipart upload
+
+**Attributes Captured:**
+
+- Request: key, prefix, limit, delimiter, range (offset/length/suffix), conditional requests (onlyIf)
+- Response: size, etag, version, uploaded timestamp, httpMetadata (content-type, cache-control, etc.), customMetadata, checksums (MD5, SHA1, SHA256, SHA384, SHA512), storage class
+- List: truncated, object count, delimited prefixes count, cursor
+
+---
+
+#### **Durable Object SQL Storage API** (✅ IMPLEMENTED)
+
+**Operations Implemented:**
+
+- ✅ `sql.exec()` - Execute SQL with automatic cursor instrumentation
+
+**Attributes Captured:**
+
+- `cloudflare.durable_object.query.bindings` - Number of SQL parameter bindings
+- `cloudflare.durable_object.response.rows_read` - Rows read (captured after cursor iteration)
+- `cloudflare.durable_object.response.rows_written` - Rows written (captured after cursor iteration)
+- `db.query.text` - The SQL query string
+
+**How It Works:**
+The library wraps `SqlStorageCursor` to intercept iteration methods (`toArray()`, `one()`, `Symbol.iterator`, `next()`). When iteration completes, it captures `rowsRead` and `rowsWritten` from the cursor and ends the span.
+
+**How SQL Cursors Work:**
+
+- The library automatically ends spans for non-iterated cursors (DDL statements like CREATE TABLE)
+- For queries that return data, the span ends when you consume the cursor
+- Supports multi-statement SQL (separated by semicolons)
+
+**Operations NOT Yet Implemented:**
+
+- ❌ `sql.prepare()` - SQL prepared statements (returns `SqlStorageStatement`)
+- ❌ `sql.ingest()` - Bulk data ingest (returns `SqlStorageIngestResult`)
+- ❌ `sql.databaseSize` - Database size getter property
+
+---
+
+#### **Images Binding** (✅ BASIC IMPLEMENTATION)
+
+**Operations Implemented:**
+
+- ✅ `get` - Get image metadata
+- ✅ `list` - List images
+- ✅ `delete` - Delete image
+
+**Attributes Captured:**
+
+- Request: key
+- Response: id, filename, uploaded timestamp, metadata keys, variants count, requireSignedURLs
+
+**Note:** This is a basic implementation using duck-typing detection since Images binding isn't in `@cloudflare/workers-types` yet. Transform operations (`output`) are not instrumented.
+
+---
+
+#### **Rate Limiting Binding** (✅ IMPLEMENTED)
+
+**Operations Implemented:**
+
+- ✅ `limit` - Execute rate limit check
+
+**Attributes Captured:**
+
+- `cloudflare.rate_limit.key` - The rate limit key
+- `cloudflare.rate_limit.success` - Whether the request succeeded
+- `cloudflare.rate_limit.allowed` - Whether the request was allowed
+
+---
+
 ### ❌ Missing Bindings (High Priority)
-
-#### **R2 Object Storage** (NOT IMPLEMENTED)
-
-Cloudflare's official telemetry includes full R2 instrumentation with extensive attributes:
-
-**Operations Missing:**
-
-- `r2_head` - Object metadata
-- `r2_get` - Object retrieval with range/conditional requests
-- `r2_put` - Object upload with checksums/metadata
-- `r2_list` - Bucket listing
-- `r2_delete` - Single/batch deletion
-- `r2_createMultipartUpload` - Multipart upload initiation
-- `r2_uploadPart` - Part upload
-- `r2_abortMultipartUpload` - Abort upload
-- `r2_completeMultipartUpload` - Complete upload
-
-**Key Attributes Missing:**
-
-- `cloudflare.r2.bucket`, `cloudflare.r2.operation`
-- `cloudflare.r2.request.key`, `cloudflare.r2.request.size`
-- `cloudflare.r2.request.range.*` (offset, length, suffix)
-- `cloudflare.r2.request.ssec_key` - Server-side encryption
-- `cloudflare.r2.request.checksum.*` (type, value)
-- `cloudflare.r2.response.etag`, `cloudflare.r2.response.size`
-- `cloudflare.r2.response.storage_class`
-- HTTP metadata (content-type, cache-control, etc.)
-- Conditional request attributes (only_if.\*)
-
-**Impact:** R2 is a major Cloudflare service. Missing instrumentation means no visibility into object storage operations.
-
----
-
-#### **Durable Object SQL Storage API** (NOT IMPLEMENTED)
-
-Cloudflare added a new SQLite-backed storage API for Durable Objects. We only support the legacy KV-style API.
-
-**Operations Missing:**
-
-- `durable_object_storage_exec` - Execute SQL
-- `durable_object_storage_getDatabaseSize` - Get DB size
-- `durable_object_storage_ingest` - Bulk data ingest
-- SQL-backed `kv_get/put/delete/list` - KV operations on SQL storage
-
-**Key Attributes Missing:**
-
-- `cloudflare.durable_object.query.bindings` - SQL parameter bindings
-- `cloudflare.durable_object.response.rows_read/rows_written`
-- `cloudflare.durable_object.response.db_size`
-- `cloudflare.durable_object.response.statement_count`
-
-**Impact:** Users of the new SQL storage API get no instrumentation.
-
----
-
-#### **Images Binding** (NOT IMPLEMENTED)
-
-**Operations Missing:**
-
-- `images_output` - Transform images
-- `images_info` - Get image metadata
-
-**Key Attributes Missing:**
-
-- `cloudflare.images.options.*` (format, quality, background, transforms)
-- `cloudflare.images.result.*` (format, file_size, width, height)
-- `cloudflare.images.error.code`
-
----
 
 #### **Email Sending Operations** (PARTIALLY IMPLEMENTED)
 
@@ -685,14 +799,6 @@ We instrument the **email handler** (incoming email) but not outbound email oper
 
 ---
 
-#### **Rate Limiting Binding** (NOT IMPLEMENTED)
-
-**Operations Missing:**
-
-- `ratelimit_run` - Execute rate limit check
-
----
-
 #### **Browser Rendering** (NOT IMPLEMENTED)
 
 **Operations Missing:**
@@ -701,22 +807,36 @@ We instrument the **email handler** (incoming email) but not outbound email oper
 
 ---
 
-### ❌ Missing Handlers
+### ✅ Implemented Handlers
 
-#### **RPC Handler** (NOT IMPLEMENTED)
+#### **RPC Handler** (✅ FULLY IMPLEMENTED)
 
-Cloudflare supports RPC-style Durable Object method calls with automatic instrumentation:
+RPC-style Durable Object method calls and Service Binding calls are fully instrumented with automatic trace context propagation:
 
 ```typescript
-// NOT instrumented by us:
+// ✅ FULLY instrumented with trace context:
 await stub.myRpcMethod(args)
 ```
 
-**Key Attributes Missing:**
+**How It Works:**
 
-- `cloudflare.jsrpc.method` - RPC method name
+- **Client Side**: The library intercepts RPC method calls on stubs and injects trace context as the first argument
+- **Server Side**: The DO/Service handler extracts trace context from the first argument and removes it before calling the actual method
+- Trace context includes the DO name (if available) for better span naming
 
-**Impact:** RPC calls to Durable Objects are completely invisible in traces.
+**Attributes Captured:**
+
+- `rpc.system` = 'cloudflare_rpc'
+- `rpc.service` = namespace or DO name
+- `rpc.method` = method name
+- `cloudflare.jsrpc.method` = method name
+- `do.id` = Durable Object ID
+- `do.name` = Durable Object name (if available)
+
+**Span Naming:**
+
+- Client spans: `RPC {service}.{method}`
+- Server spans: `{doName}.{method}` or `{doId}.{method}`
 
 ---
 
@@ -758,40 +878,49 @@ We have extensive fetch instrumentation but are missing:
 
 ### 📊 Summary of Instrumentation Coverage
 
-| Service/Handler                   | Status             | Coverage                            |
-| --------------------------------- | ------------------ | ----------------------------------- |
-| **Fetch Handler**                 | ✅ Implemented     | 95% - Missing TTFB                  |
-| **Scheduled Handler**             | ✅ Implemented     | 100%                                |
-| **Queue Handler**                 | ✅ Implemented     | 100%                                |
-| **Email Handler**                 | ✅ Implemented     | 100%                                |
-| **Alarm Handler**                 | ✅ Implemented     | 100%                                |
-| **RPC Handler**                   | ❌ Not Implemented | 0%                                  |
-| **Tail Handler**                  | ❌ Not Implemented | 0%                                  |
-| **D1 Database**                   | ✅ Implemented     | 90% - Missing bookmark/region attrs |
-| **KV Namespace**                  | ✅ Implemented     | 100%                                |
-| **R2 Storage**                    | ❌ Not Implemented | 0%                                  |
-| **Cache API**                     | ⚠️ Partial         | 85% - Missing cache_control attrs   |
-| **Queue Producer**                | ✅ Implemented     | 100%                                |
-| **Durable Objects (Fetch/Alarm)** | ✅ Implemented     | 100%                                |
-| **DO Storage (Legacy KV)**        | ✅ Implemented     | 100%                                |
-| **DO Storage (SQL)**              | ❌ Not Implemented | 0%                                  |
-| **Analytics Engine**              | ✅ Implemented     | 100%                                |
-| **Images**                        | ❌ Not Implemented | 0%                                  |
-| **Email Sending**                 | ❌ Not Implemented | 0%                                  |
-| **Rate Limiting**                 | ❌ Not Implemented | 0%                                  |
-| **Browser Rendering**             | ❌ Not Implemented | 0%                                  |
+| Service/Handler                   | Status         | Coverage                                     |
+| --------------------------------- | -------------- | -------------------------------------------- |
+| **Fetch Handler**                 | ✅ Implemented | 95% - Missing TTFB                           |
+| **Scheduled Handler**             | ✅ Implemented | 100%                                         |
+| **Queue Handler**                 | ✅ Implemented | 100%                                         |
+| **Email Handler**                 | ✅ Implemented | 100%                                         |
+| **Alarm Handler**                 | ✅ Implemented | 100%                                         |
+| **RPC Handler (DO/Service)**      | ✅ Implemented | 100%                                         |
+| **Tail Handler**                  | ❌ Missing     | 0%                                           |
+| **D1 Database**                   | ✅ Implemented | 90% - Missing bookmark/region attrs          |
+| **KV Namespace**                  | ✅ Implemented | 100%                                         |
+| **R2 Storage**                    | ✅ Implemented | 95% - Missing uploadPart/abort/complete      |
+| **Cache API**                     | ⚠️ Partial     | 85% - Missing cache_control attrs            |
+| **Queue Producer**                | ✅ Implemented | 100%                                         |
+| **Durable Objects (Fetch/Alarm)** | ✅ Implemented | 100%                                         |
+| **DO Storage (Legacy KV)**        | ✅ Implemented | 100%                                         |
+| **DO Storage (SQL)**              | ✅ Implemented | 75% - Missing prepare/ingest/getDatabaseSize |
+| **Analytics Engine**              | ✅ Implemented | 100%                                         |
+| **Images**                        | ✅ Implemented | 60% - Basic get/list/delete only             |
+| **Email Sending**                 | ❌ Missing     | 0%                                           |
+| **Rate Limiting**                 | ✅ Implemented | 100%                                         |
+| **Browser Rendering**             | ❌ Missing     | 0%                                           |
+| **Logs (Console + OTLP)**         | ✅ Implemented | 100%                                         |
 
 ### Priority for Future Implementation
 
 **High Priority:**
 
-1. **R2 Storage** - Major service, heavily used
-2. **DO SQL Storage API** - New official API
-3. **RPC Handler** - RPC calls are increasingly common
+1. **DO SQL Storage API (Complete)** - Add prepare(), ingest(), getDatabaseSize()
+2. **R2 Multipart Upload Operations** - uploadPart(), abortMultipartUpload(), completeMultipartUpload()
+3. **Cache API Enhancements** - Add cache_control attributes
 
-**Medium Priority:** 4. **Images Binding** - Used for image processing workloads 5. **Email Sending Operations** - Complete email support 6. **Cache API enhancements** - Add missing attributes
+**Medium Priority:**
 
-**Low Priority:** 7. **Rate Limiting** - Niche use case 8. **Browser Rendering** - Specialized workload 9. **Tail Handler** - Advanced use case
+4. **Images Transform Operations** - output() method for image transformation
+5. **Email Sending Operations** - Complete email support with reply/forward/send
+6. **Tail Handler** - For trace aggregation use cases
+
+**Low Priority:**
+
+7. **Browser Rendering** - Puppeteer API (specialized workload)
+8. **Fetch Handler TTFB** - Time to first byte metric
+9. **D1 Bookmark/Region Attributes** - Additional metadata attributes
 
 ## Contributing Guidelines
 

@@ -192,11 +192,22 @@ function getParentContextFromRequest(request: Request) {
 	return acceptTraceContext ? getParentContextFromHeaders(request.headers) : api_context.active()
 }
 
-function updateSpanNameOnRoute(span: Span, request: IncomingRequest) {
+function updateSpanNameOnRoute(span: Span, request: IncomingRequest, result?: Response) {
 	const readable = span as unknown as ReadableSpan
 	if (readable.attributes['http.route']) {
 		const method = request.method.toUpperCase()
 		span.updateName(`${method} ${readable.attributes['http.route']}`)
+	}
+	// Set span status based on HTTP response status code
+	if (result) {
+		if (result.status >= 400) {
+			span.setStatus({
+				code: SpanStatusCode.ERROR,
+				message: `HTTP ${result.status}: ${result.statusText}`,
+			})
+		} else {
+			span.setStatus({ code: SpanStatusCode.OK })
+		}
 	}
 }
 
@@ -224,7 +235,10 @@ export const fetchInstrumentation: HandlerInstrumentation<IncomingRequest, OrPro
 		}
 	},
 	getAttributesFromResult: (response) => {
-		return gatherResponseAttributes(response)
+		const attrs = gatherResponseAttributes(response)
+		attrs['http.status_code'] = response.status
+		attrs['http.status_text'] = response.statusText
+		return attrs
 	},
 	executionSucces: updateSpanNameOnRoute,
 	executionFailed: updateSpanNameOnRoute,

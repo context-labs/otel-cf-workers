@@ -20,7 +20,6 @@ import {
 	ATTR_CLOUDFLARE_DO_SQL_RESPONSE_ROWS_READ,
 	ATTR_CLOUDFLARE_DO_SQL_RESPONSE_ROWS_WRITTEN,
 	ATTR_DB_QUERY_TEXT,
-	ATTR_DB_OPERATION_BATCH_SIZE,
 } from '../constants'
 
 type ExtraAttributeFn = (argArray: any[], result: any) => Attributes
@@ -217,9 +216,13 @@ export function instrumentStorage(storage: DurableObjectStorage): DurableObjectS
 }
 
 // SQL Storage API Instrumentation
-type SQLStorageExecResult = {
+type SQLStorageCursor = {
 	rowsRead: number
 	rowsWritten: number
+	[Symbol.iterator](): IterableIterator<any>
+	toArray(): any[]
+	one(): any
+	next(): { done?: boolean; value?: any }
 }
 
 function instrumentSQLStorageExec(fn: SqlStorage['exec'], operation: string): SqlStorage['exec'] {
@@ -227,7 +230,7 @@ function instrumentSQLStorageExec(fn: SqlStorage['exec'], operation: string): Sq
 	const fnHandler: ProxyHandler<any> = {
 		apply: (target, thisArg, argArray) => {
 			const query = argArray[0] as string
-			const bindings = argArray[1] as unknown[] | undefined
+			const bindings = argArray.slice(1) as unknown[]
 
 			const attributes: Attributes = {
 				[ATTR_DB_SYSTEM_NAME]: dbSystem,
@@ -243,69 +246,95 @@ function instrumentSQLStorageExec(fn: SqlStorage['exec'], operation: string): Sq
 				kind: SpanKind.CLIENT,
 				attributes,
 			}
-			return tracer.startActiveSpan(`Durable Object SQL ${operation}`, options, async (span) => {
-				const result = (await Reflect.apply(target, thisArg, argArray)) as SQLStorageExecResult
+			return tracer.startActiveSpan(`Durable Object SQL ${operation}`, options, (span) => {
+				const cursor = Reflect.apply(target, thisArg, argArray) as SQLStorageCursor
+				let spanEnded = false
 
-				if (result && typeof result === 'object') {
-					if ('rowsRead' in result) {
-						span.setAttribute(ATTR_CLOUDFLARE_DO_SQL_RESPONSE_ROWS_READ, result.rowsRead)
+				const endSpanWithMetrics = () => {
+					if (spanEnded) return
+					spanEnded = true
+
+					// Capture metrics from cursor
+					if (typeof cursor.rowsRead === 'number') {
+						span.setAttribute(ATTR_CLOUDFLARE_DO_SQL_RESPONSE_ROWS_READ, cursor.rowsRead)
 					}
-					if ('rowsWritten' in result) {
-						span.setAttribute(ATTR_CLOUDFLARE_DO_SQL_RESPONSE_ROWS_WRITTEN, result.rowsWritten)
+					if (typeof cursor.rowsWritten === 'number') {
+						span.setAttribute(ATTR_CLOUDFLARE_DO_SQL_RESPONSE_ROWS_WRITTEN, cursor.rowsWritten)
 					}
+					span.end()
 				}
 
-				span.end()
-				return result
-			})
-		},
-	}
-	return wrap(fn, fnHandler)
-}
-
-function instrumentSQLStorageExecBatch(fn: SqlStorage['exec'], operation: string): SqlStorage['exec'] {
-	const tracer = trace.getTracer('do_sql_storage')
-	const fnHandler: ProxyHandler<any> = {
-		apply: (target, thisArg, argArray) => {
-			const statements = argArray[0] as Array<{ query: string; bindings?: unknown[] }>
-
-			const attributes: Attributes = {
-				[ATTR_DB_SYSTEM_NAME]: dbSystem,
-				[ATTR_DB_OPERATION_NAME]: operation,
-				[ATTR_DB_OPERATION_BATCH_SIZE]: statements.length,
-			}
-
-			// Use first query as representative
-			if (statements.length > 0 && statements[0]) {
-				attributes[ATTR_DB_QUERY_TEXT] = statements[0].query
-			}
-
-			const options: SpanOptions = {
-				kind: SpanKind.CLIENT,
-				attributes,
-			}
-			return tracer.startActiveSpan(`Durable Object SQL ${operation}`, options, async (span) => {
-				const results = (await Reflect.apply(target, thisArg, argArray)) as SQLStorageExecResult[]
-
-				// Aggregate results
-				let totalRowsRead = 0
-				let totalRowsWritten = 0
-
-				for (const result of results) {
-					if (result && typeof result === 'object') {
-						if ('rowsRead' in result) {
-							totalRowsRead += result.rowsRead
-						}
-						if ('rowsWritten' in result) {
-							totalRowsWritten += result.rowsWritten
-						}
+				// For DDL statements (CREATE, DROP, ALTER) and multi-statement queries that aren't typically iterated,
+				// end the span immediately after capturing available metrics
+				// This handles cases like: ctx.storage.sql.exec('CREATE TABLE ...')
+				// We use a microtask to allow synchronous property access to complete first
+				Promise.resolve().then(() => {
+					if (!spanEnded) {
+						endSpanWithMetrics()
 					}
-				}
+				})
 
-				span.setAttribute(ATTR_CLOUDFLARE_DO_SQL_RESPONSE_ROWS_READ, totalRowsRead)
-				span.setAttribute(ATTR_CLOUDFLARE_DO_SQL_RESPONSE_ROWS_WRITTEN, totalRowsWritten)
-				span.end()
-				return results
+				// Wrap the cursor to intercept iteration methods
+				const wrappedCursor = new Proxy(cursor, {
+					get(target, prop, receiver) {
+						const value = Reflect.get(target, prop, receiver)
+
+						// Intercept methods that consume the cursor
+						if (prop === 'toArray') {
+							return function (this: any, ...args: any[]) {
+								const result = typeof value === 'function' ? value.apply(target, args) : value
+								endSpanWithMetrics()
+								return result
+							}
+						}
+
+						if (prop === 'one') {
+							return function (this: any, ...args: any[]) {
+								const result = typeof value === 'function' ? value.apply(target, args) : value
+								endSpanWithMetrics()
+								return result
+							}
+						}
+
+						// Intercept Symbol.iterator (used by spread operator and for-of)
+						if (prop === Symbol.iterator) {
+							return function (this: any) {
+								const iterator = (typeof value === 'function' ? value.apply(target) : value) as Iterator<any>
+								let iterationComplete = false
+
+								// Wrap the iterator to detect when iteration completes
+								return {
+									next() {
+										const result = iterator.next()
+										if (result.done && !iterationComplete) {
+											iterationComplete = true
+											endSpanWithMetrics()
+										}
+										return result
+									},
+									[Symbol.iterator]() {
+										return this
+									},
+								}
+							}
+						}
+
+						// Intercept next() for manual iteration
+						if (prop === 'next') {
+							return function (this: any, ...args: any[]) {
+								const result = typeof value === 'function' ? value.apply(target, args) : value
+								if (result && result.done) {
+									endSpanWithMetrics()
+								}
+								return result
+							}
+						}
+
+						return typeof value === 'function' ? value.bind(target) : value
+					},
+				})
+
+				return wrappedCursor
 			})
 		},
 	}
@@ -324,8 +353,6 @@ function instrumentSQLStorage(sql: SqlStorage): SqlStorage {
 			switch (prop) {
 				case 'exec':
 					return instrumentSQLStorageExec(fn, 'exec')
-				case 'execBatch':
-					return instrumentSQLStorageExecBatch(fn, 'execBatch')
 				default:
 					return fn
 			}
