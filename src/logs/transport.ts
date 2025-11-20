@@ -204,7 +204,7 @@ export class ConsoleTransport implements LogTransport {
 	export(logs: ReadableLogRecord[], callback: ExportResultCallback): void {
 		try {
 			for (const log of logs) {
-				this.printLog(log)
+				this.printLog(this.options.transformLog ? this.options.transformLog(log) : log)
 			}
 			callback({ code: ExportResultCode.SUCCESS })
 		} catch (error) {

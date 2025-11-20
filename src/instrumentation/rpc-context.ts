@@ -13,6 +13,8 @@ const RPC_CONTEXT_MARKER = '__otel_rpc_ctx__'
 export interface RpcContextCarrier {
 	[RPC_CONTEXT_MARKER]: true
 	headers: Record<string, string>
+	// Metadata about the RPC call
+	doName?: string // DO name if available (from id.name)
 }
 
 /**
@@ -27,10 +29,15 @@ export function isRpcContextCarrier(obj: unknown): obj is RpcContextCarrier {
  * This serializes the active context into a plain object that can be
  * passed as an argument through RPC calls
  */
-export function injectRpcContext(ctx: Context = api_context.active()): RpcContextCarrier {
+export function injectRpcContext(ctx: Context = api_context.active(), doName?: string): RpcContextCarrier {
 	const carrier: RpcContextCarrier = {
 		[RPC_CONTEXT_MARKER]: true,
 		headers: {},
+	}
+
+	// Add DO name if provided
+	if (doName) {
+		carrier.doName = doName
 	}
 
 	// Use OpenTelemetry's propagation API to inject context into headers

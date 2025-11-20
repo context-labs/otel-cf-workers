@@ -10,6 +10,7 @@ export class WorkerLogger implements Logger {
 	private readonly name: string
 	private readonly version?: string
 	private readonly inheritedAttributes: LogAttributes
+	private readonly minSeverity: number
 
 	constructor(
 		name: string,
@@ -17,12 +18,35 @@ export class WorkerLogger implements Logger {
 		resource: Resource,
 		version?: string,
 		inheritedAttributes?: LogAttributes,
+		minLevel: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal' = 'info',
 	) {
 		this.name = name
 		this.processors = processors
 		this.resource = resource
 		this.version = version
 		this.inheritedAttributes = inheritedAttributes || {}
+		this.minSeverity = this.levelToSeverity(minLevel)
+	}
+
+	private levelToSeverity(level: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal'): number {
+		switch (level) {
+			case 'trace':
+				return SEVERITY_NUMBERS.TRACE
+			case 'debug':
+				return SEVERITY_NUMBERS.DEBUG
+			case 'info':
+				return SEVERITY_NUMBERS.INFO
+			case 'warn':
+				return SEVERITY_NUMBERS.WARN
+			case 'error':
+				return SEVERITY_NUMBERS.ERROR
+			case 'fatal':
+				return SEVERITY_NUMBERS.FATAL
+		}
+	}
+
+	private shouldEmit(severityNumber: number): boolean {
+		return severityNumber >= this.minSeverity
 	}
 
 	emit(logRecord: Partial<LogRecord>): void {
@@ -49,6 +73,8 @@ export class WorkerLogger implements Logger {
 	}
 
 	trace(message: string, attributes?: LogAttributes): void {
+		if (!this.shouldEmit(SEVERITY_NUMBERS.TRACE)) return
+
 		this.emit({
 			severityNumber: SEVERITY_NUMBERS.TRACE,
 			severityText: 'TRACE',
@@ -58,6 +84,8 @@ export class WorkerLogger implements Logger {
 	}
 
 	debug(message: string, attributes?: LogAttributes): void {
+		if (!this.shouldEmit(SEVERITY_NUMBERS.DEBUG)) return
+
 		this.emit({
 			severityNumber: SEVERITY_NUMBERS.DEBUG,
 			severityText: 'DEBUG',
@@ -67,6 +95,8 @@ export class WorkerLogger implements Logger {
 	}
 
 	info(message: string, attributes?: LogAttributes): void {
+		if (!this.shouldEmit(SEVERITY_NUMBERS.INFO)) return
+
 		this.emit({
 			severityNumber: SEVERITY_NUMBERS.INFO,
 			severityText: 'INFO',
@@ -76,6 +106,8 @@ export class WorkerLogger implements Logger {
 	}
 
 	warn(message: string, attributes?: LogAttributes): void {
+		if (!this.shouldEmit(SEVERITY_NUMBERS.WARN)) return
+
 		this.emit({
 			severityNumber: SEVERITY_NUMBERS.WARN,
 			severityText: 'WARN',
@@ -85,6 +117,8 @@ export class WorkerLogger implements Logger {
 	}
 
 	error(message: string | Error, attributes?: LogAttributes): void {
+		if (!this.shouldEmit(SEVERITY_NUMBERS.ERROR)) return
+
 		let body: string
 		let attrs: LogAttributes = { ...attributes }
 
@@ -109,6 +143,8 @@ export class WorkerLogger implements Logger {
 	}
 
 	fatal(message: string, attributes?: LogAttributes): void {
+		if (!this.shouldEmit(SEVERITY_NUMBERS.FATAL)) return
+
 		this.emit({
 			severityNumber: SEVERITY_NUMBERS.FATAL,
 			severityText: 'FATAL',
@@ -132,6 +168,15 @@ export class WorkerLogger implements Logger {
 			...attributes,
 		}
 
-		return new WorkerLogger(this.name, this.processors, this.resource, this.version, mergedAttributes)
+		// Convert minSeverity back to level for child logger
+		let minLevel: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal' = 'info'
+		if (this.minSeverity <= SEVERITY_NUMBERS.TRACE) minLevel = 'trace'
+		else if (this.minSeverity <= SEVERITY_NUMBERS.DEBUG) minLevel = 'debug'
+		else if (this.minSeverity <= SEVERITY_NUMBERS.INFO) minLevel = 'info'
+		else if (this.minSeverity <= SEVERITY_NUMBERS.WARN) minLevel = 'warn'
+		else if (this.minSeverity <= SEVERITY_NUMBERS.ERROR) minLevel = 'error'
+		else minLevel = 'fatal'
+
+		return new WorkerLogger(this.name, this.processors, this.resource, this.version, mergedAttributes, minLevel)
 	}
 }

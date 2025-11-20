@@ -46,8 +46,8 @@ function instrumentRpcMethod(method: Function, methodName: string, nsName: strin
 
 			return tracer.startActiveSpan(spanName, options, async (span) => {
 				try {
-					// Inject trace context as first argument
-					const contextCarrier = injectRpcContext(api_context.active())
+					// Inject trace context as first argument, including DO name if available
+					const contextCarrier = injectRpcContext(api_context.active(), stubId.name)
 					const argsWithContext = [contextCarrier, ...argArray]
 
 					const result = await Reflect.apply(target, thisArg, argsWithContext)
@@ -106,12 +106,32 @@ function instrumentBindingGet(getFn: DurableObjectNamespace['get'], nsName: stri
 	return wrap(getFn, getHandler)
 }
 
+// getByName is just a convenience wrapper that calls idFromName + get
+// We still need to instrument it to capture the stub
+function instrumentBindingGetByName(
+	getByNameFn: DurableObjectNamespace['getByName'],
+	nsName: string,
+): DurableObjectNamespace['getByName'] {
+	const getByNameHandler: ProxyHandler<DurableObjectNamespace['getByName']> = {
+		apply(target, thisArg, argArray) {
+			const stub: DurableObjectStub = Reflect.apply(target, thisArg, argArray)
+			// The name passed to getByName should be available on stub.id.name
+			// but we'll also track it ourselves to be safe
+			return instrumentBindingStub(stub, nsName)
+		},
+	}
+	return wrap(getByNameFn, getByNameHandler)
+}
+
 export function instrumentDOBinding(ns: DurableObjectNamespace, nsName: string) {
 	const nsHandler: ProxyHandler<typeof ns> = {
 		get(target, prop, receiver) {
 			if (prop === 'get') {
 				const fn = Reflect.get(ns, prop, receiver)
 				return instrumentBindingGet(fn, nsName)
+			} else if (prop === 'getByName') {
+				const fn = Reflect.get(ns, prop, receiver)
+				return instrumentBindingGetByName(fn, nsName)
 			} else {
 				return passthroughGet(target, prop, receiver)
 			}
@@ -249,21 +269,38 @@ function instrumentRpcHandlerMethod(
 			// Extract and remove RPC context carrier from arguments
 			const [extractedContext, cleanedArgs] = extractAndRemoveRpcContext(argArray)
 
+			// Get DO name from carrier if available, fall back to id.name
+			const carrierDoName = argArray.length > 0 && extractedContext ? (argArray[0] as any).doName : undefined
+			const doName = carrierDoName || id.name || undefined
+
+			// DEBUG: Log context extraction
+			console.log('[DO RPC Server]', {
+				methodName,
+				hasExtractedContext: !!extractedContext,
+				carrierDoName,
+				idName: id.name,
+				finalDoName: doName,
+				argArrayLength: argArray.length,
+				cleanedArgsLength: cleanedArgs.length,
+			})
+
 			// Build the context: start with extracted parent context (if any), then add config
 			let context = extractedContext || api_context.active()
 			context = setConfig(config, context)
 
 			const tracer = trace.getTracer('do_rpc_handler')
-			const doName = id.name || id.toString()
 
 			const executeRpc = async () => {
-				const attributes = {
+				const attributes: Record<string, string> = {
 					[ATTR_RPC_SYSTEM]: 'cloudflare_rpc',
 					[ATTR_RPC_METHOD]: methodName,
 					[ATTR_CLOUDFLARE_JSRPC_METHOD]: methodName,
 					[SemanticAttributes.FAAS_TRIGGER]: 'rpc',
 					'do.id': id.toString(),
-					'do.name': id.name,
+				}
+
+				if (doName) {
+					attributes['do.name'] = doName
 				}
 
 				const options: SpanOptions = {
@@ -271,7 +308,7 @@ function instrumentRpcHandlerMethod(
 					attributes,
 				}
 
-				const spanName = `Durable Object RPC ${doName}.${methodName}`
+				const spanName = doName ? `${doName}.${methodName}` : `${attributes['do.id']}.${methodName}`
 
 				return tracer.startActiveSpan(spanName, options, async (span) => {
 					try {
