@@ -9,7 +9,7 @@ import {
 	instrumentClientFetch,
 } from './fetch'
 import { instrumentEnv } from './env'
-import { Initialiser, setConfig } from '../config'
+import { getActiveConfig, Initialiser, setConfig } from '../config'
 import { instrumentStorage } from './do-storage'
 import { DOConstructorTrigger } from '../types'
 import { ATTR_CLOUDFLARE_JSRPC_METHOD, ATTR_RPC_SYSTEM, ATTR_RPC_SERVICE, ATTR_RPC_METHOD } from '../constants'
@@ -21,6 +21,96 @@ type DO = DurableObject | DurableObjectClass
 type FetchFn = DurableObject['fetch']
 type AlarmFn = DurableObject['alarm']
 type Env = Record<string, unknown>
+
+export interface InstrumentOptions extends Omit<SpanOptions, 'kind'> {
+	// Any standard SpanOptions (attributes, links, etc.)
+}
+
+export type InstrumentMethod = {
+	<T>(name: string, fn: () => Promise<T>): Promise<T>
+	<T>(name: string, options: InstrumentOptions, fn: () => Promise<T>): Promise<T>
+}
+
+/**
+ * Base class for instrumented Durable Objects with TypeScript support for injected methods.
+ * Extend this instead of DurableObject to automatically get typing for `this.instrument()`.
+ *
+ * @example
+ * ```typescript
+ * import { InstrumentedDurableObject } from '@inference-net/otel-cf-workers'
+ *
+ * export class MyDO extends InstrumentedDurableObject<Env> {
+ *   async someMethod() {
+ *     // this.instrument is available with full TypeScript support!
+ *     await this.instrument('custom-operation', async () => {
+ *       // Your code here
+ *     })
+ *   }
+ * }
+ * ```
+ */
+export class InstrumentedDurableObject<Env = unknown> extends DurableObjectClass<Env> {
+	declare instrument: InstrumentMethod
+}
+
+function createInstrumentMethod(state: DurableObjectState, initialiser: Initialiser, env: Env): InstrumentMethod {
+	return async function instrument<T>(
+		name: string,
+		optionsOrFn: InstrumentOptions | (() => Promise<T>),
+		maybeFn?: () => Promise<T>,
+	): Promise<T> {
+		// Parse arguments - support both forms
+		const options: InstrumentOptions = typeof optionsOrFn === 'function' ? {} : optionsOrFn
+		const fn = typeof optionsOrFn === 'function' ? optionsOrFn : maybeFn!
+
+		const tracer = trace.getTracer('DO custom span')
+
+		const spanOptions: SpanOptions = {
+			...options,
+			attributes: {
+				'do.id': state.id.toString(),
+				...(state.id.name && { 'do.name': state.id.name }),
+				...options.attributes,
+			},
+		}
+
+		// Ensure config is available in context
+		// If already in a traced context (fetch/alarm/RPC), config will exist
+		// If not, we need to initialize it
+		const executeWithConfig = async () => {
+			const currentContext = api_context.active()
+			const existingConfig = getActiveConfig()
+
+			let context = currentContext
+			if (!existingConfig) {
+				// No config in context - we're being called outside fetch/alarm/RPC
+				// Initialize config for this call
+				const config = initialiser(env, { id: state.id.toString(), name: state.id.name })
+				context = setConfig(config, currentContext)
+			}
+
+			// Use the current active context - if we're inside fetch/alarm/RPC,
+			// this will be a child span. Otherwise, it's a root span.
+			return api_context.with(context, () =>
+				tracer.startActiveSpan(name, spanOptions, async (span) => {
+					try {
+						const result = await fn()
+						span.setStatus({ code: SpanStatusCode.OK })
+						return result
+					} catch (error) {
+						span.recordException(error as Exception)
+						span.setStatus({ code: SpanStatusCode.ERROR })
+						throw error
+					} finally {
+						span.end()
+					}
+				}),
+			)
+		}
+
+		return executeWithConfig()
+	}
+}
 
 function instrumentRpcMethod(method: Function, methodName: string, nsName: string, stubId: DurableObjectId): Function {
 	const tracer = trace.getTracer('do_rpc_client')
@@ -325,20 +415,12 @@ function instrumentRpcHandlerMethod(
 	return wrap(fn, fnHandler)
 }
 
-function instrumentDurableObject(
-	doObj: DO,
-	initialiser: Initialiser,
-	env: Env,
-	state: DurableObjectState,
-	classStyle: boolean,
-) {
+function instrumentDurableObject(doObj: DO, initialiser: Initialiser, env: Env, state: DurableObjectState) {
 	const objHandler: ProxyHandler<DurableObject> = {
 		get(target, prop) {
-			if (classStyle && prop === 'ctx') {
-				return state
-			} else if (classStyle && prop === 'env') {
-				return env
-			} else if (prop === 'fetch') {
+			// instrument, env, and ctx are now real properties, so this won't be called for them
+			// This proxy mainly handles fetch, alarm, and RPC method wrapping
+			if (prop === 'fetch') {
 				const fetchFn = Reflect.get(target, prop)
 				return instrumentFetchFn(fetchFn, initialiser, env, state.id)
 			} else if (prop === 'alarm') {
@@ -371,17 +453,38 @@ export function instrumentDOClass<C extends DOClass>(doClass: C, initialiser: In
 			const context = setConfig(constructorConfig)
 			const state = instrumentState(orig_state)
 			const env = instrumentEnv(orig_env)
-			const classStyle = doClass.prototype instanceof DurableObjectClass
-			const createDO = () => {
-				if (classStyle) {
-					return new target(orig_state, orig_env)
-				} else {
-					return new target(state, env)
-				}
-			}
+
+			// Always pass original state/env to constructor
+			// The DurableObject base class (if extends DurableObject) expects the real types
+			const createDO = () => new target(orig_state, orig_env)
 			const doObj = api_context.with(context, createDO)
 
-			return instrumentDurableObject(doObj, initialiser, env, state, classStyle)
+			// Always inject instrumented versions as real properties
+			// This works for both class-style and legacy DOs, and avoids proxy issues
+			const instrumentMethod = createInstrumentMethod(state, initialiser, env)
+
+			Object.defineProperty(doObj, 'instrument', {
+				value: instrumentMethod,
+				writable: false,
+				enumerable: false,
+				configurable: true,
+			})
+
+			Object.defineProperty(doObj, 'env', {
+				value: env,
+				writable: false,
+				enumerable: true,
+				configurable: true,
+			})
+
+			Object.defineProperty(doObj, 'ctx', {
+				value: state,
+				writable: false,
+				enumerable: true,
+				configurable: true,
+			})
+
+			return instrumentDurableObject(doObj, initialiser, env, state)
 		},
 	}
 	return wrap(doClass, classHandler)

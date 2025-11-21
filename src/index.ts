@@ -7,6 +7,8 @@ export * from './multiexporter'
 export * from './spanprocessor'
 export { withNextSpan } from './tracer'
 export type * from './types'
+export type { InstrumentOptions, InstrumentMethod } from './instrumentation/do'
+export { InstrumentedDurableObject } from './instrumentation/do'
 
 // Logs exports
 export { getLogger, WorkerLoggerProvider, setGlobalLoggerProvider, getGlobalLoggerProvider } from './logs/provider'
