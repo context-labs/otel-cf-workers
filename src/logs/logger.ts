@@ -1,4 +1,4 @@
-import { context as api_context } from '@opentelemetry/api'
+import { context as api_context, trace, SpanStatusCode } from '@opentelemetry/api'
 import { Resource } from '@opentelemetry/resources'
 import { Logger, LogAttributes, LogRecordProcessor, LogRecord } from './types'
 import { LogRecordImpl } from './logrecord'
@@ -116,34 +116,43 @@ export class WorkerLogger implements Logger {
 		})
 	}
 
-	error(message: string | Error, attributes?: LogAttributes): void {
+	error(message: string, attributes?: LogAttributes): void {
 		if (!this.shouldEmit(SEVERITY_NUMBERS.ERROR)) return
 
-		let body: string
-		let attrs: LogAttributes = { ...attributes }
+		// Check if an error was provided in attributes
+		const exception = attributes?.['error'] instanceof Error ? attributes['error'] : undefined
 
-		if (message instanceof Error) {
-			body = message.message
-			attrs = {
-				...attrs,
-				'exception.type': message.name,
-				'exception.message': message.message,
-				'exception.stacktrace': message.stack,
+		// Record error on active span if one exists
+		const activeSpan = trace.getActiveSpan()
+		if (activeSpan) {
+			activeSpan.setStatus({ code: SpanStatusCode.ERROR, message })
+			if (exception) {
+				activeSpan.recordException(exception)
 			}
-		} else {
-			body = message
 		}
 
 		this.emit({
 			severityNumber: SEVERITY_NUMBERS.ERROR,
 			severityText: 'ERROR',
-			body,
-			attributes: attrs,
+			body: message,
+			attributes,
 		})
 	}
 
 	fatal(message: string, attributes?: LogAttributes): void {
 		if (!this.shouldEmit(SEVERITY_NUMBERS.FATAL)) return
+
+		// Check if an error was provided in attributes
+		const exception = attributes?.['error'] instanceof Error ? attributes['error'] : undefined
+
+		// Record error on active span if one exists
+		const activeSpan = trace.getActiveSpan()
+		if (activeSpan) {
+			activeSpan.setStatus({ code: SpanStatusCode.ERROR, message })
+			if (exception) {
+				activeSpan.recordException(exception)
+			}
+		}
 
 		this.emit({
 			severityNumber: SEVERITY_NUMBERS.FATAL,

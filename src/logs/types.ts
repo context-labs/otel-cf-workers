@@ -6,9 +6,13 @@ import { SeverityNumber } from '../constants'
 
 export type LogBody = string | Record<string, any>
 
-export interface LogAttributes {
-	[key: string]: any
-}
+/**
+ * Log attributes must be a plain object with string keys.
+ * This type explicitly excludes strings to prevent accidental argument swapping.
+ */
+export type LogAttributes = {
+	[key: string]: unknown
+} & { length?: never; substring?: never }
 
 export interface LogRecord {
 	readonly timeUnixNano: HrTime
@@ -34,7 +38,7 @@ export interface Logger {
 	debug(message: string, attributes?: LogAttributes): void
 	info(message: string, attributes?: LogAttributes): void
 	warn(message: string, attributes?: LogAttributes): void
-	error(message: string | Error, attributes?: LogAttributes): void
+	error(message: string, attributes?: LogAttributes): void
 	fatal(message: string, attributes?: LogAttributes): void
 	forceFlush(): Promise<void>
 	child(attributes: LogAttributes): Logger

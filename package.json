@@ -1,6 +1,6 @@
 {
 	"name": "@inference-net/otel-cf-workers",
-	"version": "2.2.0",
+	"version": "2.2.1",
 	"module": "./dist/index.js",
 	"type": "module",
 	"types": "./dist/index.d.ts",
