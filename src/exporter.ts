@@ -8,14 +8,19 @@ import { DEFAULT_OTLP_HEADERS } from './constants'
 export interface OTLPExporterConfig {
 	url: string
 	headers?: Record<string, string>
+	fetcher?: Fetcher['fetch']
 }
 
 export class OTLPExporter implements SpanExporter {
 	private headers: Record<string, string>
 	private url: string
+	private fetcher: Fetcher['fetch'] = global.fetch
 	constructor(config: OTLPExporterConfig) {
 		this.url = config.url
 		this.headers = Object.assign({}, DEFAULT_OTLP_HEADERS, config.headers)
+		if (config?.fetcher) {
+			this.fetcher = config.fetcher
+		}
 	}
 
 	export(items: any[], resultCallback: (result: ExportResult) => void): void {
@@ -49,7 +54,7 @@ export class OTLPExporter implements SpanExporter {
 			body,
 		}
 
-		unwrap(fetch)(this.url, params)
+		unwrap(this.fetcher)(this.url, params)
 			.then((response) => {
 				if (response.ok) {
 					onSuccess()
