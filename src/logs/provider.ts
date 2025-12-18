@@ -17,22 +17,16 @@ export class WorkerLoggerProvider implements LoggerProvider {
 	private loggers: Map<string, Logger> = new Map()
 	private processors: LogRecordProcessor[]
 	private resource: Resource
-	private minLevel: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal'
 
-	constructor(
-		processors: LogRecordProcessor[],
-		resource: Resource,
-		minLevel: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal' = 'info',
-	) {
+	constructor(processors: LogRecordProcessor[], resource: Resource) {
 		this.processors = processors
 		this.resource = resource
-		this.minLevel = minLevel
 	}
 
 	getLogger(name: string, version?: string, options?: LoggerOptions): Logger {
 		const key = `${name}@${version || ''}:${options?.schemaUrl || ''}`
 		if (!this.loggers.has(key)) {
-			this.loggers.set(key, new WorkerLogger(name, this.processors, this.resource, version, undefined, this.minLevel))
+			this.loggers.set(key, new WorkerLogger(name, this.processors, this.resource, version))
 		}
 		return this.loggers.get(key)!
 	}
@@ -57,6 +51,9 @@ class NoopLogger implements Logger {
 	fatal(): void {}
 	async forceFlush(): Promise<void> {}
 	child(): Logger {
+		return this
+	}
+	setProperties(): this {
 		return this
 	}
 }
