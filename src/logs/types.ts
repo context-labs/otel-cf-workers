@@ -3,6 +3,7 @@ import { InstrumentationScope } from '@opentelemetry/core'
 import { Resource } from '@opentelemetry/resources'
 import { ExportResult } from '@opentelemetry/core'
 import { SeverityNumber } from '../constants'
+import { LogLevel } from '../types'
 
 export type LogBody = string | Record<string, any>
 
@@ -41,7 +42,8 @@ export interface Logger {
 	error(message: string, attributes?: LogAttributes): void
 	fatal(message: string, attributes?: LogAttributes): void
 	forceFlush(): Promise<void>
-	child(attributes: LogAttributes): Logger
+	child(name: string, attributes?: LogAttributes): Logger
+	setProperties(attributes: LogAttributes): this
 }
 
 export interface LoggerProvider {
@@ -77,11 +79,13 @@ export interface BatchConfig {
 export interface OTLPTransportConfig {
 	url: string
 	headers?: Record<string, string>
+	level?: LogLevel
 }
 
 export interface ConsoleTransportConfig {
 	pretty?: boolean
 	colors?: boolean
 	includeTimestamp?: boolean
+	level?: LogLevel
 	transformLog?: (logRecord: ReadableLogRecord) => ReadableLogRecord
 }

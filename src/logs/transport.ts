@@ -8,7 +8,25 @@ import {
 	ConsoleTransportConfig,
 } from './types'
 import { unwrap } from '../wrap'
-import { DEFAULT_OTLP_HEADERS } from '../constants'
+import { DEFAULT_OTLP_HEADERS, SEVERITY_NUMBERS } from '../constants'
+import { LogLevel } from '../types'
+
+function levelToSeverity(level: LogLevel): number {
+	switch (level) {
+		case 'TRACE':
+			return SEVERITY_NUMBERS.TRACE
+		case 'DEBUG':
+			return SEVERITY_NUMBERS.DEBUG
+		case 'INFO':
+			return SEVERITY_NUMBERS.INFO
+		case 'WARN':
+			return SEVERITY_NUMBERS.WARN
+		case 'ERROR':
+			return SEVERITY_NUMBERS.ERROR
+		case 'FATAL':
+			return SEVERITY_NUMBERS.FATAL
+	}
+}
 
 /**
  * OTLP HTTP/JSON Transport for Logs
@@ -18,14 +36,22 @@ export class OTLPTransport implements LogTransport {
 	readonly name = 'otlp'
 	private headers: Record<string, string>
 	private url: string
+	private minSeverity: number
 
 	constructor(config: OTLPTransportConfig) {
 		this.url = config.url
 		this.headers = Object.assign({}, DEFAULT_OTLP_HEADERS, config.headers)
+		this.minSeverity = levelToSeverity(config.level ?? 'TRACE')
 	}
 
 	export(logs: ReadableLogRecord[], callback: ExportResultCallback): void {
-		this._export(logs)
+		const filteredLogs = logs.filter((log) => (log.severityNumber ?? 0) >= this.minSeverity)
+		if (filteredLogs.length === 0) {
+			callback({ code: ExportResultCode.SUCCESS })
+			return
+		}
+
+		this._export(filteredLogs)
 			.then(() => {
 				callback({ code: ExportResultCode.SUCCESS })
 			})
@@ -191,6 +217,7 @@ export class OTLPTransport implements LogTransport {
 export class ConsoleTransport implements LogTransport {
 	readonly name = 'console'
 	private options: ConsoleTransportConfig
+	private minSeverity: number
 
 	constructor(options: ConsoleTransportConfig = {}) {
 		this.options = {
@@ -199,11 +226,13 @@ export class ConsoleTransport implements LogTransport {
 			includeTimestamp: options.includeTimestamp ?? true,
 			transformLog: options.transformLog ?? ((l) => l),
 		}
+		this.minSeverity = levelToSeverity(options.level ?? 'TRACE')
 	}
 
 	export(logs: ReadableLogRecord[], callback: ExportResultCallback): void {
 		try {
 			for (const log of logs) {
+				if ((log.severityNumber ?? 0) < this.minSeverity) continue
 				this.printLog(this.options.transformLog ? this.options.transformLog(log) : log)
 			}
 			callback({ code: ExportResultCode.SUCCESS })

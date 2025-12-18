@@ -98,7 +98,7 @@ function init(config: ResolvedConfig, serviceConfig: any, propagator: any): void
 
 		// Initialize logs if configured
 		if (config.logs && config.logs.processors.length > 0) {
-			const logsProvider = new WorkerLoggerProvider(config.logs.processors, resource, config.logs.level)
+			const logsProvider = new WorkerLoggerProvider(config.logs.processors, resource)
 			logsProvider.register()
 
 			// Instrument console if enabled

@@ -101,17 +101,17 @@ export interface LogsInstrumentationOptions {
 	instrumentConsole?: boolean
 }
 
+export type LogLevel = 'TRACE' | 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' | 'FATAL'
+
 export interface LogsConfig {
 	transports?: LogTransport[]
 	batching?: LogBatchConfig
 	instrumentation?: LogsInstrumentationOptions
-	level?: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal'
 }
 
 export interface ResolvedLogsConfig {
 	processors: LogRecordProcessor[]
 	instrumentation: LogsInstrumentationOptions
-	level: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal'
 }
 
 export interface WorkerOtelConfig {
