@@ -77,6 +77,7 @@ export interface BatchConfig {
 export interface OTLPTransportConfig {
 	url: string
 	headers?: Record<string, string>
+	fetcher?: Fetcher['fetch']
 }
 
 export interface ConsoleTransportConfig {

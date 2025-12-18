@@ -14,7 +14,7 @@ export interface OTLPExporterConfig {
 export class OTLPExporter implements SpanExporter {
 	private headers: Record<string, string>
 	private url: string
-	private fetcher: Fetcher['fetch'] = global.fetch
+	private fetcher: Fetcher['fetch'] = fetch
 	constructor(config: OTLPExporterConfig) {
 		this.url = config.url
 		this.headers = Object.assign({}, DEFAULT_OTLP_HEADERS, config.headers)

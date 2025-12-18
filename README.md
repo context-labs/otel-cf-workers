@@ -264,6 +264,33 @@ const config: ResolveConfigFn = (env: Env, trigger) => ({
 - Both tracing and logging
 - Neither (no telemetry)
 
+### Custom Fetcher
+
+```typescript
+const config: ResolveConfigFn = (env: Env, trigger) => {
+	const { fetch } = env.VPC_BINDING
+	const fetcher = fetch.bind(env.VPC_BINDING)
+	return {
+		service: {
+			name: 'my-service',
+			version: '1.0.0', // Optional
+			namespace: 'production', // Optional
+		},
+		trace: {
+			exporter: {
+				fetcher,
+				url: env.VPC_,
+				headers: { 'signoz-access-token': env.SIGNOZ_ACCESS_TOKEN },
+			},
+		},
+		// Logs are optional
+		logs: {
+			transports: [new OTLPTransport({ fetcher, url: env.LOGS_ENDPOINT })],
+		},
+	}
+}
+```
+
 ### Sampling
 
 ```typescript
