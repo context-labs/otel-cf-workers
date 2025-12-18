@@ -37,11 +37,13 @@ export class OTLPTransport implements LogTransport {
 	private headers: Record<string, string>
 	private url: string
 	private minSeverity: number
+	private fetcher: Fetcher['fetch']
 
 	constructor(config: OTLPTransportConfig) {
 		this.url = config.url
 		this.headers = Object.assign({}, DEFAULT_OTLP_HEADERS, config.headers)
 		this.minSeverity = levelToSeverity(config.level ?? 'TRACE')
+		this.fetcher = config.fetcher ?? fetch
 	}
 
 	export(logs: ReadableLogRecord[], callback: ExportResultCallback): void {
@@ -79,7 +81,7 @@ export class OTLPTransport implements LogTransport {
 			body,
 		}
 
-		const response = await unwrap(fetch)(this.url, params)
+		const response = await unwrap(this.fetcher)(this.url, params)
 
 		if (!response.ok) {
 			throw new OTLPExporterError(`Exporter received a statusCode: ${response.status}`)
