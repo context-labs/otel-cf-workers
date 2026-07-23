@@ -56,7 +56,7 @@ export class OTLPExporter implements SpanExporter {
 				} else {
 					onError(new OTLPExporterError(`Exporter received a statusCode: ${response.status}`))
 				}
-				await response.body?.cancel()
+				response.body?.cancel()
 			})
 			.catch((error) => {
 				onError(new OTLPExporterError(`Exception during export: ${error.toString()}`, error.code, error.stack))
