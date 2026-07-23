@@ -1,6 +1,6 @@
 name = "otel-cf-workers-test"
 main = "test-worker.ts"
-compatibility_date = "2025-11-19"
+compatibility_date = "2026-07-21"
 compatibility_flags = ["nodejs_compat"]
 
 # KV namespace for testing

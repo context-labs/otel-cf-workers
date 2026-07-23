@@ -52,6 +52,10 @@ export default {
 }
 
 export class OtelDO implements DurableObject {
+	// Injected by instrumentDO: the instrumented DurableObjectState.
+	// Use this (not the constructor arg) so storage operations are traced.
+	declare ctx: DurableObjectState
+
 	constructor(
 		protected state: DurableObjectState,
 		protected env: Env,
@@ -62,13 +66,13 @@ export class OtelDO implements DurableObject {
 	}
 	async fetch(request: Request): Promise<Response> {
 		await fetch('https://cloudflare.com')
-		await this.state.storage.put('something', 'else')
-		await this.state.storage.setAlarm(Date.now() + 1000)
+		await this.ctx.storage.put('something', 'else')
+		await this.ctx.storage.setAlarm(Date.now() + 1000)
 		return new Response('Hello World!')
 	}
 	async alarm(): Promise<void> {
 		console.log('ding ding!')
-		await this.state.storage.get('something')
-		await this.state.storage.get('something_else')
+		await this.ctx.storage.get('something')
+		await this.ctx.storage.get('something_else')
 	}
 }

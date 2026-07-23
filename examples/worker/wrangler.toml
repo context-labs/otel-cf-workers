@@ -1,6 +1,6 @@
 name = "otel-test"
 main = "src/index.ts"
-compatibility_date = "2023-03-27"
+compatibility_date = "2026-07-21"
 compatibility_flags = [ "nodejs_compat" ]
 
 kv_namespaces = [

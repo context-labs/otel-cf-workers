@@ -3,24 +3,28 @@ import handler, { Env, OtelDO } from './handler'
 
 const config: ResolveConfigFn = (env: Env, _trigger) => {
 	return {
-		exporter: {
-			url: env['otel.exporter.url'],
-			headers: { 'signoz-access-token': env['otel.exporter.headers.signoz-access-token'] },
-		},
 		service: {
 			name: 'greetings',
 			version: '0.1',
+		},
+		trace: {
+			exporter: {
+				url: env['otel.exporter.url'],
+				headers: { 'signoz-access-token': env['otel.exporter.headers.signoz-access-token'] },
+			},
 		},
 	}
 }
 
 const doConfig: ResolveConfigFn = (env: Env) => {
 	return {
-		exporter: {
-			url: env['otel.exporter.url'],
-			headers: { 'signoz-access-token': env['otel.exporter.headers.signoz-access-token'] },
-		},
 		service: { name: 'greetings-do' },
+		trace: {
+			exporter: {
+				url: env['otel.exporter.url'],
+				headers: { 'signoz-access-token': env['otel.exporter.headers.signoz-access-token'] },
+			},
+		},
 	}
 }
 
