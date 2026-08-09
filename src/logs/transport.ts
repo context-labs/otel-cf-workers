@@ -86,6 +86,8 @@ export class OTLPTransport implements LogTransport {
 		if (!response.ok) {
 			throw new OTLPExporterError(`Exporter received a statusCode: ${response.status}`)
 		}
+
+		await response.body?.cancel()
 	}
 
 	private transformToOTLP(logs: ReadableLogRecord[]): any {
