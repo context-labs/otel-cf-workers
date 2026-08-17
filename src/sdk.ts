@@ -11,7 +11,14 @@ import { W3CTraceContextPropagator } from '@opentelemetry/core'
 
 import { Initialiser, parseConfig, setConfig, ResolvedConfig } from './config'
 import { WorkerTracerProvider } from './provider'
-import { Trigger, OrPromise, HandlerInstrumentation, ConfigurationOption, ServiceConfig } from './types'
+import {
+	Trigger,
+	OrPromise,
+	HandlerInstrumentation,
+	ConfigurationOption,
+	InstrumentRuntimeOptions,
+	ServiceConfig,
+} from './types'
 import { WorkerLoggerProvider, getLogger } from './logs/provider'
 import { unwrap } from './wrap'
 import { WorkerTracer } from './tracer'
@@ -119,18 +126,28 @@ function init(
 	}
 }
 
-function createInitialiser(config: ConfigurationOption): Initialiser {
+function createInitialiser<E extends Env>(
+	config: ConfigurationOption,
+	options?: InstrumentRuntimeOptions<E>,
+): Initialiser {
+	const resolveTelemetryFetch = (env: E) => {
+		const option = options?.telemetryFetcher
+		if (!option) return undefined
+		const fetcher = typeof option === 'function' ? option(env) : option
+		return fetcher.fetch.bind(fetcher) as typeof globalThis.fetch
+	}
+
 	if (typeof config === 'function') {
 		return (env, trigger) => {
 			const userConfig = config(env, trigger)
-			const conf = parseConfig(userConfig)
+			const conf = parseConfig(userConfig, resolveTelemetryFetch(env as E))
 			const propagator = userConfig.propagator || new W3CTraceContextPropagator()
 			init(conf, userConfig.service, propagator, env)
 			return conf
 		}
 	} else {
 		return (env) => {
-			const conf = parseConfig(config)
+			const conf = parseConfig(config, resolveTelemetryFetch(env as E))
 			const propagator = config.propagator || new W3CTraceContextPropagator()
 			init(conf, config.service, propagator, env)
 			return conf
@@ -242,8 +259,9 @@ function createHandlerProxy<T extends Trigger, E extends Env, R extends OrPromis
 export function instrument<E extends Env, Q, C>(
 	handler: ExportedHandler<E, Q, C>,
 	config: ConfigurationOption,
+	options?: InstrumentRuntimeOptions<E>,
 ): ExportedHandler<E, Q, C> {
-	const initialiser = createInitialiser(config)
+	const initialiser = createInitialiser(config, options)
 
 	if (handler.fetch) {
 		const fetcher = unwrap(handler.fetch) as FetchHandler
@@ -268,8 +286,12 @@ export function instrument<E extends Env, Q, C>(
 	return handler
 }
 
-export function instrumentDO(doClass: DOClass, config: ConfigurationOption) {
-	const initialiser = createInitialiser(config)
+export function instrumentDO<E extends Env, C extends DOClass>(
+	doClass: C,
+	config: ConfigurationOption,
+	options?: InstrumentRuntimeOptions<E>,
+) {
+	const initialiser = createInitialiser(config, options)
 
 	return instrumentDOClass(doClass, initialiser)
 }

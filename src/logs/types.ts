@@ -80,6 +80,7 @@ export interface OTLPTransportConfig {
 	url: string
 	headers?: Record<string, string>
 	level?: LogLevel
+	fetch?: typeof globalThis.fetch
 }
 
 export interface ConsoleTransportConfig {

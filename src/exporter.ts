@@ -10,14 +10,17 @@ import { TraceExportError } from './errors'
 export interface OTLPExporterConfig {
 	url: string
 	headers?: Record<string, string>
+	fetch?: typeof globalThis.fetch
 }
 
 export class OTLPExporter implements SpanExporter {
 	private headers: Record<string, string>
 	private url: string
+	private fetch: typeof globalThis.fetch
 	constructor(config: OTLPExporterConfig) {
 		this.url = config.url
 		this.headers = Object.assign({}, DEFAULT_OTLP_HEADERS, config.headers)
+		this.fetch = config.fetch ?? unwrap(globalThis.fetch)
 	}
 
 	export(items: ReadableSpan[], resultCallback: (result: ExportResult) => void): void {
@@ -34,7 +37,7 @@ export class OTLPExporter implements SpanExporter {
 		return yield* Effect.tryPromise({
 			try: async (signal) => {
 				const exportMessage = JsonTraceSerializer.serializeRequest(items)
-				const response = await unwrap(fetch)(this.url, {
+				const response = await this.fetch(this.url, {
 					method: 'POST',
 					headers: this.headers,
 					body: new TextDecoder().decode(exportMessage),

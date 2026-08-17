@@ -112,6 +112,22 @@ const config: ResolveConfigFn = (env: Env, _trigger) => ({
 export default instrument(handler, config)
 ```
 
+### Private OTLP Collector via Workers VPC
+
+Route built-in OTLP trace and log exports through a Workers VPC Service or VPC Network binding. The binding's `fetch` receiver is preserved automatically.
+
+```typescript
+interface Env {
+	OTEL_VPC: Fetcher
+}
+
+export default instrument(handler, config, {
+	telemetryFetcher: (env: Env) => env.OTEL_VPC,
+})
+```
+
+The configured OTLP URLs must remain absolute. For VPC Services, Cloudflare routes requests to the registered target; the URL host sets the HTTP `Host` header and HTTPS SNI.
+
 ### Durable Objects
 
 ```typescript
@@ -135,7 +151,9 @@ const config: ResolveConfigFn = (env, _trigger) => ({
 	service: { name: 'my-durable-object' },
 })
 
-export const MyDO = instrumentDO(MyDurableObject, config)
+export const MyDO = instrumentDO(MyDurableObject, config, {
+	telemetryFetcher: (env: Env) => env.OTEL_VPC,
+})
 ```
 
 ## OpenTelemetry Features

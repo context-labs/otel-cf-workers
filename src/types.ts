@@ -10,6 +10,14 @@ export type OrPromise<T extends any> = T | Promise<T>
 export type ResolveConfigFn<Env = any> = (env: Env, trigger: Trigger) => WorkerOtelConfig
 export type ConfigurationOption = WorkerOtelConfig | ResolveConfigFn
 
+export interface InstrumentRuntimeOptions<E extends Record<string, unknown>> {
+	/**
+	 * Routes library-owned OTLP requests through a Cloudflare Fetcher binding,
+	 * such as a Workers VPC Service or VPC Network binding.
+	 */
+	telemetryFetcher?: Fetcher | ((env: E) => Fetcher)
+}
+
 export type PostProcessorFn = (spans: ReadableSpan[]) => ReadableSpan[]
 
 export type ExporterConfig = OTLPExporterConfig | SpanExporter

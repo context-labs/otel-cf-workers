@@ -16,6 +16,7 @@ import { OTLPExporter } from './exporter'
 import { multiTailSampler, isHeadSampled, isRootErrorSpan, createSampler } from './sampling'
 import { BatchTraceSpanProcessor } from './spanprocessor'
 import { MultiTransportLogRecordProcessor } from './logs/logprocessor'
+import { OTLPTransport } from './logs/transport'
 
 const traceConfigSymbol = Symbol('Otel Workers Tracing Configuration')
 const logsConfigSymbol = Symbol('Otel Workers Logs Configuration')
@@ -56,23 +57,27 @@ function isSampler(sampler: Sampler | ParentRatioSamplingConfig): sampler is Sam
 	return !!(sampler as Sampler).shouldSample
 }
 
-export function parseConfig(supplied: WorkerOtelConfig): ResolvedConfig {
+export function parseConfig(supplied: WorkerOtelConfig, telemetryFetch?: typeof globalThis.fetch): ResolvedConfig {
 	const config: ResolvedConfig = {}
 
 	// Parse trace config if provided
 	if (supplied.trace) {
-		config.trace = parseTraceConfig(supplied.trace, supplied.propagator)
+		config.trace = parseTraceConfig(supplied.trace, supplied.propagator, telemetryFetch)
 	}
 
 	// Parse logs config if provided
 	if (supplied.logs) {
-		config.logs = parseLogsConfig(supplied.logs)
+		config.logs = parseLogsConfig(supplied.logs, telemetryFetch)
 	}
 
 	return config
 }
 
-function parseTraceConfig(supplied: TraceConfig, propagator?: any): ResolvedTraceConfig {
+function parseTraceConfig(
+	supplied: TraceConfig,
+	propagator?: any,
+	telemetryFetch?: typeof globalThis.fetch,
+): ResolvedTraceConfig {
 	if (isSpanProcessorConfig(supplied)) {
 		const headSampleConf = supplied.sampling?.headSampler || { ratio: 1 }
 		const headSampler = isSampler(headSampleConf) ? headSampleConf : createSampler(headSampleConf)
@@ -108,18 +113,23 @@ function parseTraceConfig(supplied: TraceConfig, propagator?: any): ResolvedTrac
 			},
 		}
 	} else {
-		const exporter = isSpanExporter(supplied.exporter) ? supplied.exporter : new OTLPExporter(supplied.exporter)
+		const exporter = isSpanExporter(supplied.exporter)
+			? supplied.exporter
+			: new OTLPExporter({ ...supplied.exporter, fetch: telemetryFetch ?? supplied.exporter.fetch })
 		const spanProcessors = [new BatchTraceSpanProcessor(exporter)]
 		const newConfig = Object.assign({}, supplied, { exporter: undefined, spanProcessors }) as TraceConfig
-		return parseTraceConfig(newConfig, propagator)
+		return parseTraceConfig(newConfig, propagator, telemetryFetch)
 	}
 }
 
-function parseLogsConfig(supplied: LogsConfig): ResolvedLogsConfig {
+function parseLogsConfig(supplied: LogsConfig, telemetryFetch?: typeof globalThis.fetch): ResolvedLogsConfig {
+	const transports = telemetryFetch
+		? supplied.transports?.map((transport) =>
+				transport instanceof OTLPTransport ? transport.withFetch(telemetryFetch) : transport,
+			)
+		: supplied.transports
 	const processors =
-		supplied.transports && supplied.transports.length > 0
-			? [new MultiTransportLogRecordProcessor(supplied.transports, supplied.batching)]
-			: []
+		transports && transports.length > 0 ? [new MultiTransportLogRecordProcessor(transports, supplied.batching)] : []
 
 	return {
 		processors,
