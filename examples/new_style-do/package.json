@@ -1,6 +1,7 @@
 {
 	"name": "new_style-do",
 	"version": "0.0.0",
+	"packageManager": "bun@canary",
 	"private": true,
 	"scripts": {
 		"deploy": "wrangler deploy",
@@ -9,8 +10,8 @@
 		"cf-typegen": "wrangler types"
 	},
 	"devDependencies": {
-		"@types/node": "^22.15.18",
-		"typescript": "^5.5.2",
-		"wrangler": "^4.14.4"
+		"@types/node": "^24.10.1",
+		"typescript": "^5.9.3",
+		"wrangler": "^4.123.0"
 	}
 }

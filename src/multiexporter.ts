@@ -1,55 +1,62 @@
-import { SpanExporter } from '@opentelemetry/sdk-trace-base'
+import { ReadableSpan, SpanExporter } from '@opentelemetry/sdk-trace-base'
 import { ExportResult, ExportResultCode } from '@opentelemetry/core'
+import { Effect } from 'effect'
+import { TraceExportError } from './errors'
 
-// First implementation, completely synchronous, more tested.
+const exportWith = (exporter: SpanExporter, items: ReadonlyArray<ReadableSpan>) =>
+	Effect.tryPromise({
+		try: () =>
+			new Promise<void>((resolve, reject) => {
+				exporter.export([...items], (result) => {
+					if (result.code === ExportResultCode.SUCCESS) {
+						resolve()
+					} else {
+						reject(result.error ?? new Error('Span exporter failed without an error'))
+					}
+				})
+			}),
+		catch: (cause) => new TraceExportError({ operation: 'MultiSpanExporter.export', cause }),
+	})
 
 export class MultiSpanExporter implements SpanExporter {
-	private exporters: Array<SpanExporter>
-	constructor(exporters: Array<SpanExporter>) {
+	private exporters: ReadonlyArray<SpanExporter>
+	constructor(exporters: ReadonlyArray<SpanExporter>) {
 		this.exporters = exporters
 	}
 
-	export(items: any[], resultCallback: (result: ExportResult) => void): void {
-		for (const exporter of this.exporters) {
-			exporter.export(items, resultCallback)
-		}
+	export(items: ReadableSpan[], resultCallback: (result: ExportResult) => void): void {
+		void Effect.runPromise(
+			Effect.all(
+				this.exporters.map((exporter) => exportWith(exporter, items)),
+				{ discard: true },
+			),
+		)
+			.then(() => resultCallback({ code: ExportResultCode.SUCCESS }))
+			.catch((error) => resultCallback({ code: ExportResultCode.FAILED, error }))
 	}
 
-	async shutdown(): Promise<void> {
-		for (const exporter of this.exporters) {
-			await exporter.shutdown()
-		}
+	shutdown(): Promise<void> {
+		return Effect.runPromise(
+			Effect.all(
+				this.exporters.map((exporter) => Effect.tryPromise(() => exporter.shutdown())),
+				{ discard: true },
+			),
+		)
 	}
 }
 
-// async
-
 export class MultiSpanExporterAsync implements SpanExporter {
-	private exporters: Array<SpanExporter>
-	constructor(exporters: Array<SpanExporter>) {
-		this.exporters = exporters
+	private readonly delegate: MultiSpanExporter
+
+	constructor(exporters: ReadonlyArray<SpanExporter>) {
+		this.delegate = new MultiSpanExporter(exporters)
 	}
 
-	export(items: any[], resultCallback: (result: ExportResult) => void): void {
-		const promises = this.exporters.map(
-			(exporter) =>
-				new Promise<ExportResult>((resolve) => {
-					exporter.export(items, resolve)
-				}),
-		)
-
-		Promise.all(promises).then((results) => {
-			const failed = results.filter((result) => result.code === ExportResultCode.FAILED)
-			if (failed.length > 0) {
-				// not ideal, but just return the first error
-				resultCallback({ code: ExportResultCode.FAILED, error: failed[0]!.error })
-			} else {
-				resultCallback({ code: ExportResultCode.SUCCESS })
-			}
-		})
+	export(items: ReadableSpan[], resultCallback: (result: ExportResult) => void): void {
+		this.delegate.export(items, resultCallback)
 	}
 
-	async shutdown(): Promise<void> {
-		await Promise.all(this.exporters.map((exporter) => exporter.shutdown()))
+	shutdown(): Promise<void> {
+		return this.delegate.shutdown()
 	}
 }

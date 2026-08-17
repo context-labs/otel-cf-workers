@@ -1,10 +1,11 @@
 {
 	"name": "otel-test",
 	"version": "0.0.0",
+	"packageManager": "bun@canary",
 	"devDependencies": {
-		"@cloudflare/workers-types": "^4.20250510.0",
-		"typescript": "^5.8.3",
-		"wrangler": "^4.14.4"
+		"@cloudflare/workers-types": "^4.20251119.0",
+		"typescript": "^5.9.3",
+		"wrangler": "^4.123.0"
 	},
 	"private": true,
 	"scripts": {

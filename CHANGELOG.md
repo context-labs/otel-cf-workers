@@ -1,5 +1,15 @@
 # @inference-net/otel-cf-workers
 
+## 3.0.0
+
+### Major Changes
+
+- Prepare v3 for Bun canary and Effect v4 RC. Bun is now the supported package manager, and `effect@4.0.0-rc.109` is a required peer dependency.
+
+  Upgrade the test runtime to Vitest 4 and `@cloudflare/vitest-pool-workers` 0.21.
+
+  **Breaking:** exporter callbacks now report one result after every configured exporter completes, failing when any exporter fails. Trace flushing now awaits export failures, and queue send/sendBatch errors are recorded on spans before being rethrown. Queue message status is tracked per instrumented batch rather than on the instrumentation instance, so overlapping batch invocations no longer share status.
+
 ## 2.0.0-alpha.1
 
 - 0000000: Forked and started upgrade work!

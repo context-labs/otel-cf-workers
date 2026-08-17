@@ -1,10 +1,17 @@
-import { context as api_context, Exception, propagation, SpanStatusCode, trace } from '@opentelemetry/api'
+import {
+	context as api_context,
+	Exception,
+	propagation,
+	SpanStatusCode,
+	TextMapPropagator,
+	trace,
+} from '@opentelemetry/api'
 import { Resource, resourceFromAttributes } from '@opentelemetry/resources'
 import { W3CTraceContextPropagator } from '@opentelemetry/core'
 
 import { Initialiser, parseConfig, setConfig, ResolvedConfig } from './config'
 import { WorkerTracerProvider } from './provider'
-import { Trigger, OrPromise, HandlerInstrumentation, ConfigurationOption } from './types'
+import { Trigger, OrPromise, HandlerInstrumentation, ConfigurationOption, ServiceConfig } from './types'
 import { WorkerLoggerProvider, getLogger } from './logs/provider'
 import { unwrap } from './wrap'
 import { WorkerTracer } from './tracer'
@@ -14,12 +21,12 @@ import { instrumentGlobalCache } from './instrumentation/cache'
 import { QueueInstrumentation } from './instrumentation/queue'
 import { DOClass, instrumentDOClass } from './instrumentation/do'
 import { scheduledInstrumentation } from './instrumentation/scheduled'
-import { instrumentEnv } from './instrumentation/env'
+import { instrumentEnv, isVersionMetadata } from './instrumentation/env'
 import { versionAttributes } from './instrumentation/version'
 import { PromiseTracker, proxyExecutionContext } from './instrumentation/common'
 import { emailInstrumentation } from './instrumentation/email'
 import { PACKAGE_VERSION } from './constants'
-import { env } from 'cloudflare:workers'
+import { instrumentConsole } from './logs/console'
 
 type FetchHandler = ExportedHandlerFetchHandler<unknown, unknown>
 type ScheduledHandler = ExportedHandlerScheduledHandler<unknown>
@@ -45,18 +52,11 @@ export function isAlarm(trigger: Trigger): trigger is 'do-alarm' {
 	return trigger === 'do-alarm'
 }
 
-function findVersionMeta(): WorkerVersionMetadata | undefined {
-	return Object.values(env).find((binding: any) => {
-		return (
-			Object.getPrototypeOf(binding).constructor.name === 'Object' &&
-			binding.id !== undefined &&
-			binding.tag !== undefined
-		)
-	})
+function findVersionMeta(env: Record<string, unknown>): WorkerVersionMetadata | undefined {
+	return Object.values(env).find(isVersionMetadata)
 }
 
-const createResource = (serviceConfig: any, versionMeta?: WorkerVersionMetadata): Resource => {
-	console.log({ versionMeta })
+const createResource = (serviceConfig: ServiceConfig, versionMeta?: WorkerVersionMetadata): Resource => {
 	const workerResourceAttrs = {
 		'cloud.provider': 'cloudflare',
 		'cloud.platform': 'cloudflare.workers',
@@ -79,9 +79,14 @@ const createResource = (serviceConfig: any, versionMeta?: WorkerVersionMetadata)
 }
 
 let initialised = false
-function init(config: ResolvedConfig, serviceConfig: any, propagator: any): void {
+function init(
+	config: ResolvedConfig,
+	serviceConfig: ServiceConfig,
+	propagator: TextMapPropagator,
+	env: Record<string, unknown>,
+): void {
 	if (!initialised) {
-		const resource = createResource(serviceConfig, findVersionMeta())
+		const resource = createResource(serviceConfig, findVersionMeta(env))
 
 		// Initialize traces if configured
 		if (config.trace) {
@@ -103,9 +108,7 @@ function init(config: ResolvedConfig, serviceConfig: any, propagator: any): void
 
 			// Instrument console if enabled
 			if (config.logs.instrumentation.instrumentConsole) {
-				import('./logs/console').then(({ instrumentConsole }) => {
-					instrumentConsole()
-				})
+				instrumentConsole()
 			}
 		}
 
@@ -122,14 +125,14 @@ function createInitialiser(config: ConfigurationOption): Initialiser {
 			const userConfig = config(env, trigger)
 			const conf = parseConfig(userConfig)
 			const propagator = userConfig.propagator || new W3CTraceContextPropagator()
-			init(conf, userConfig.service, propagator)
+			init(conf, userConfig.service, propagator, env)
 			return conf
 		}
 	} else {
-		return () => {
+		return (env) => {
 			const conf = parseConfig(config)
 			const propagator = config.propagator || new W3CTraceContextPropagator()
-			init(conf, config.service, propagator)
+			init(conf, config.service, propagator, env)
 			return conf
 		}
 	}

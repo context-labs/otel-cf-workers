@@ -127,10 +127,4 @@ export interface DOConstructorTrigger {
 }
 
 export type Trigger =
-	| Request
-	| MessageBatch
-	| ScheduledController
-	| DOConstructorTrigger
-	| 'do-alarm'
-	| 'do-rpc'
-	| ForwardableEmailMessage
+	Request | MessageBatch | ScheduledController | DOConstructorTrigger | 'do-alarm' | 'do-rpc' | ForwardableEmailMessage

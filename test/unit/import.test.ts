@@ -1,12 +1,15 @@
-import { expect, it } from 'vitest'
+import { expect, it } from '@effect/vitest'
+import { Effect } from 'effect'
 
-import * as otelCfWorkers from '../..'
-import { instrument } from '../..'
+import * as otelCfWorkers from '../../src/index'
+import { instrument } from '../../src/index'
 
-it('can import in esm', () => {
-	expect(otelCfWorkers).toBeDefined()
-	expect(otelCfWorkers.instrument).toBeTypeOf('function')
+it.effect('can import in esm', () =>
+	Effect.sync(() => {
+		expect(otelCfWorkers).toBeDefined()
+		expect(otelCfWorkers.instrument).toBeTypeOf('function')
 
-	expect(instrument).toBeDefined()
-	expect(instrument).toBeTypeOf('function')
-})
+		expect(instrument).toBeDefined()
+		expect(instrument).toBeTypeOf('function')
+	}),
+)

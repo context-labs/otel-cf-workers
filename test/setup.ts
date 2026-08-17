@@ -1,4 +1,5 @@
-import { beforeEach, vi } from 'vitest'
+import { beforeEach } from '@effect/vitest'
+import { vi } from 'vitest'
 import { resetSpans, spanProcessor } from './test-worker'
 import { AlwaysOnSampler } from '@opentelemetry/sdk-trace-base'
 import type { ResolvedTraceConfig } from '../src/types'

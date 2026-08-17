@@ -1,21 +1,24 @@
 {
 	"name": "queues-example",
 	"version": "0.0.0",
+	"packageManager": "bun@canary",
 	"devDependencies": {
-		"@cloudflare/workers-types": "^4.20230321.0",
-		"typescript": "^5.0.3",
-		"vitest": "^0.29.8",
-		"wrangler": "2.13.0"
+		"@cloudflare/workers-types": "^4.20251119.0",
+		"typescript": "^5.9.3",
+		"vitest": "4.1.10",
+		"wrangler": "^4.123.0"
 	},
 	"private": true,
 	"scripts": {
-		"start": "wrangler dev --experimental-local",
-		"deploy": "wrangler publish",
+		"start": "wrangler dev",
+		"deploy": "wrangler deploy",
 		"test": "vitest",
 		"start-persist": "wrangler dev --local --persist-to ./data",
-		"replit-run-command": "npm run start"
+		"replit-run-command": "bun run start"
 	},
 	"dependencies": {
-		"@inference-net/otel-cf-workers": "^0.0.5"
+		"@inference-net/otel-cf-workers": "^2.4.0",
+		"@opentelemetry/api": "~1.9.0",
+		"effect": "4.0.0-rc.109"
 	}
 }

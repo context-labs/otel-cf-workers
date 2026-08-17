@@ -1,43 +1,46 @@
 import { Context } from '@opentelemetry/api'
 import { ExportResultCode } from '@opentelemetry/core'
-import { LogRecordProcessor, LogTransport, ReadableLogRecord, BatchConfig } from './types'
+import { Effect } from 'effect'
+import { BatchConfig, LogRecordProcessor, LogTransport, ReadableLogRecord } from './types'
 
-/**
- * Immediate Log Record Processor
- * Exports each log record immediately without batching
- */
+const exportLogs = (transport: LogTransport, logs: ReadonlyArray<ReadableLogRecord>): Promise<void> =>
+	Effect.runPromise(
+		Effect.tryPromise({
+			try: () =>
+				new Promise<void>((resolve, reject) => {
+					transport.export([...logs], (result) => {
+						if (result.code === ExportResultCode.SUCCESS) {
+							resolve()
+						} else {
+							reject(result.error ?? new Error('Log transport failed without an error'))
+						}
+					})
+				}),
+			catch: (cause) => cause,
+		}),
+	)
+
+const track = (pending: Set<Promise<void>>, promise: Promise<void>): void => {
+	pending.add(promise)
+	void promise.then(
+		() => pending.delete(promise),
+		() => pending.delete(promise),
+	)
+}
+
 export class ImmediateLogRecordProcessor implements LogRecordProcessor {
-	private transport: LogTransport
-	private exportPromises: Promise<void>[] = []
+	private readonly pending = new Set<Promise<void>>()
 
-	constructor(transport: LogTransport) {
-		this.transport = transport
-	}
+	constructor(private readonly transport: LogTransport) {}
 
 	onEmit(logRecord: ReadableLogRecord, _context: Context): void {
-		this.exportPromises.push(this.exportLog(logRecord))
-	}
-
-	private async exportLog(logRecord: ReadableLogRecord): Promise<void> {
-		await scheduler.wait(1)
-
-		return new Promise<void>((resolve, reject) => {
-			this.transport.export([logRecord], (result) => {
-				if (result.code === ExportResultCode.SUCCESS) {
-					resolve()
-				} else {
-					console.error('Failed to export log:', result.error)
-					reject(result.error)
-				}
-			})
-		})
+		const pending = exportLogs(this.transport, [logRecord])
+		track(this.pending, pending)
+		void pending.catch((error) => console.error('Failed to export log:', error))
 	}
 
 	async forceFlush(): Promise<void> {
-		if (this.exportPromises.length > 0) {
-			await Promise.allSettled(this.exportPromises)
-			this.exportPromises = []
-		}
+		await Promise.all(this.pending)
 	}
 
 	async shutdown(): Promise<void> {
@@ -46,111 +49,92 @@ export class ImmediateLogRecordProcessor implements LogRecordProcessor {
 	}
 }
 
-/**
- * Batch Size Log Record Processor
- * Batches log records up to a maximum queue size before exporting
- */
 export class BatchSizeLogRecordProcessor implements LogRecordProcessor {
-	private transport: LogTransport
-	private logRecords: ReadableLogRecord[] = []
-	private exportPromises: Promise<void>[] = []
-	private maxQueueSize: number
-	private maxExportBatchSize: number
+	private readonly logRecords: ReadableLogRecord[] = []
+	private readonly pending = new Set<Promise<void>>()
+	private draining: Promise<void> | undefined
+	private closed = false
 
-	constructor(transport: LogTransport, config?: BatchConfig) {
-		this.transport = transport
-		this.maxQueueSize = config?.maxQueueSize ?? 512
-		this.maxExportBatchSize = config?.maxExportBatchSize ?? this.maxQueueSize
-	}
+	constructor(
+		private readonly transport: LogTransport,
+		private readonly config: BatchConfig = {},
+	) {}
 
 	onEmit(logRecord: ReadableLogRecord, _context: Context): void {
-		this.logRecords.push(logRecord)
-
-		// Auto-flush if queue is full
+		if (this.closed) return
 		if (this.logRecords.length >= this.maxQueueSize) {
-			this.exportPromises.push(this.export())
-		}
-	}
-
-	async forceFlush(): Promise<void> {
-		if (this.logRecords.length > 0) {
-			this.exportPromises.push(this.export())
-		}
-
-		if (this.exportPromises.length > 0) {
-			await Promise.allSettled(this.exportPromises)
-			this.exportPromises = []
-		}
-	}
-
-	private async export(): Promise<void> {
-		// Take up to maxExportBatchSize records
-		const batch = this.logRecords.splice(0, this.maxExportBatchSize)
-
-		if (batch.length === 0) {
+			console.warn('Dropping log record because the export queue is full')
 			return
 		}
+		this.logRecords.push(logRecord)
+		if (this.logRecords.length >= this.maxExportBatchSize) {
+			void this.requestDrain().catch((error) => console.error('Failed to export logs:', error))
+		}
+	}
 
-		await scheduler.wait(1)
-
-		return new Promise<void>((resolve, reject) => {
-			this.transport.export(batch, (result) => {
-				if (result.code === ExportResultCode.SUCCESS) {
-					resolve()
-				} else {
-					console.error('Failed to export logs:', result.error)
-					reject(result.error)
-				}
-			})
-		})
+	async forceFlush(): Promise<void> {
+		await this.requestDrain()
+		await Promise.all(this.pending)
 	}
 
 	async shutdown(): Promise<void> {
+		this.closed = true
 		await this.forceFlush()
 		await this.transport.shutdown()
 	}
+
+	private get maxQueueSize(): number {
+		return this.config.maxQueueSize ?? 512
+	}
+
+	private get maxExportBatchSize(): number {
+		return this.config.maxExportBatchSize ?? this.maxQueueSize
+	}
+
+	private requestDrain(): Promise<void> {
+		if (!this.draining) {
+			this.draining = this.drain().finally(() => {
+				this.draining = undefined
+			})
+		}
+		return this.draining
+	}
+
+	private async drain(): Promise<void> {
+		while (this.logRecords.length > 0) {
+			const batch = this.logRecords.splice(0, this.maxExportBatchSize)
+			const pending = exportLogs(this.transport, batch)
+			track(this.pending, pending)
+			await pending
+		}
+	}
 }
 
-/**
- * Multi-Transport Log Record Processor
- * Sends log records to multiple transports in parallel
- */
 export class MultiTransportLogRecordProcessor implements LogRecordProcessor {
-	private processors: LogRecordProcessor[]
+	private readonly processors: ReadonlyArray<LogRecordProcessor>
 
-	constructor(transports: LogTransport[], config?: BatchConfig) {
-		// Create a processor for each transport
-		this.processors = transports.map((transport) => {
-			return createLogProcessor(transport, config)
-		})
+	constructor(transports: ReadonlyArray<LogTransport>, config?: BatchConfig) {
+		this.processors = transports.map((transport) => createLogProcessor(transport, config))
 	}
 
 	onEmit(logRecord: ReadableLogRecord, context: Context): void {
-		// Send to all processors
-		this.processors.forEach((p) => p.onEmit(logRecord, context))
+		for (const processor of this.processors) processor.onEmit(logRecord, context)
 	}
 
 	async forceFlush(): Promise<void> {
-		await Promise.allSettled(this.processors.map((p) => p.forceFlush()))
+		await Promise.all(this.processors.map((processor) => processor.forceFlush()))
 	}
 
 	async shutdown(): Promise<void> {
-		await Promise.allSettled(this.processors.map((p) => p.shutdown()))
+		await Promise.all(this.processors.map((processor) => processor.shutdown()))
 	}
 }
 
-/**
- * Factory function to create a log processor based on strategy
- */
 export function createLogProcessor(transport: LogTransport, config?: BatchConfig): LogRecordProcessor {
-	const strategy = config?.strategy ?? 'size'
-
-	switch (strategy) {
+	switch (config?.strategy ?? 'size') {
 		case 'immediate':
 			return new ImmediateLogRecordProcessor(transport)
 		case 'size':
 			return new BatchSizeLogRecordProcessor(transport, config)
-		default:
-			throw new Error(`Unknown batch strategy: ${strategy}`)
 	}
 }

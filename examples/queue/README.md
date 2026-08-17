@@ -24,13 +24,13 @@ After you have initialized your Workers project, select **Run** again to deploy 
 You can persist development data between sessions. To run your Worker with data persisted in the `data` folder of your Repl, run the following in the Shell tab of your Replit workspace:
 
 ```shell
-npm run start-persist
+bun run start-persist
 ```
 
 The **Run** button can also be updated to always run your Worker in persistent mode:
 
 1. Open `package.json`.
-2. Update the `replit-run-command` key with a value of `npm run start-persist`.
+2. Update the `replit-run-command` key with a value of `bun run start-persist`.
 
 ## Deploy Worker to Cloudflare
 
@@ -67,7 +67,7 @@ Note: You may have to close and re-open the Shell tab of your Replit workspace b
 After adding credentials to Replit secrets, you can publish your Worker to the Cloudflare global network. Your Worker will publish to a `*.workers.dev` subdomain by default. To set up a `*.workers.dev` subdomain, go to the Cloudflare dashboard > [**Workers**](https://dash.cloudflare.com/?to=/:account/workers/overview) > Your subdomain > Change. To publish your project, run:
 
 ```shell
-npm run deploy
+bun run deploy
 ```
 
 After you have deployed your Worker, you can set up a custom domain for your project in the Cloudflare dashboard. To set up a custom domain, go to [**Workers**](https://dash.cloudflare.com/?to=/:account/workers/overview) in the Cloudflare dashboard > select your Worker > **Triggers** > **Add Custom Domain**.
@@ -75,7 +75,7 @@ After you have deployed your Worker, you can set up a custom domain for your pro
 To configure the **Run** button to publish to the Cloudflare global network rather than a Replit subdomain:
 
 1. Open `package.json`.
-2. Update the `replit-run-command` key with a value of `npm run deploy`.
+2. Update the `replit-run-command` key with a value of `bun run deploy`.
 
 ## Discord
 

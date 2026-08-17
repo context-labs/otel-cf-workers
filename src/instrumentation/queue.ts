@@ -135,7 +135,7 @@ const proxyMessageBatch = (batch: MessageBatch, count: MessageStatusCount) => {
 }
 
 export class QueueInstrumentation implements HandlerInstrumentation<MessageBatch, OrPromise<void>> {
-	private count?: MessageStatusCount
+	private readonly counts = new WeakMap<MessageBatch, MessageStatusCount>()
 
 	getInitialSpanInfo(batch: MessageBatch): InitialSpanInfo {
 		return {
@@ -152,21 +152,27 @@ export class QueueInstrumentation implements HandlerInstrumentation<MessageBatch
 	}
 
 	instrumentTrigger(batch: MessageBatch): MessageBatch {
-		this.count = new MessageStatusCount(batch.messages.length)
-		return proxyMessageBatch(batch, this.count)
+		const count = new MessageStatusCount(batch.messages.length)
+		const instrumentedBatch = proxyMessageBatch(batch, count)
+		this.counts.set(instrumentedBatch, count)
+		return instrumentedBatch
 	}
 
-	executionSucces(span: Span) {
-		if (this.count) {
-			this.count.ackRemaining()
-			span.setAttributes(this.count.toAttributes())
+	executionSucces(span: Span, batch: MessageBatch) {
+		const count = this.counts.get(batch)
+		if (count) {
+			count.ackRemaining()
+			span.setAttributes(count.toAttributes())
+			this.counts.delete(batch)
 		}
 	}
 
-	executionFailed(span: Span) {
-		if (this.count) {
-			this.count.retryRemaining()
-			span.setAttributes(this.count.toAttributes())
+	executionFailed(span: Span, batch: MessageBatch) {
+		const count = this.counts.get(batch)
+		if (count) {
+			count.retryRemaining()
+			span.setAttributes(count.toAttributes())
+			this.counts.delete(batch)
 		}
 	}
 }
@@ -174,13 +180,18 @@ export class QueueInstrumentation implements HandlerInstrumentation<MessageBatch
 function instrumentQueueSend(fn: Queue<unknown>['send'], name: string): Queue<unknown>['send'] {
 	const tracer = trace.getTracer('queueSender')
 	const handler: ProxyHandler<Queue<unknown>['send']> = {
-		apply: (target, thisArg, argArray) => {
-			return tracer.startActiveSpan(`Queues ${name} send`, async (span) => {
+		apply: (target, thisArg, argArray) =>
+			tracer.startActiveSpan(`Queues ${name} send`, async (span) => {
 				span.setAttribute('queue.operation', 'send')
-				await Reflect.apply(target, unwrap(thisArg), argArray)
-				span.end()
-			})
-		},
+				try {
+					return await Reflect.apply(target, unwrap(thisArg), argArray)
+				} catch (error) {
+					span.recordException(error as Error)
+					throw error
+				} finally {
+					span.end()
+				}
+			}),
 	}
 	return wrap(fn, handler)
 }
@@ -188,13 +199,18 @@ function instrumentQueueSend(fn: Queue<unknown>['send'], name: string): Queue<un
 function instrumentQueueSendBatch(fn: Queue<unknown>['sendBatch'], name: string): Queue<unknown>['sendBatch'] {
 	const tracer = trace.getTracer('queueSender')
 	const handler: ProxyHandler<Queue<unknown>['sendBatch']> = {
-		apply: (target, thisArg, argArray) => {
-			return tracer.startActiveSpan(`Queues ${name} sendBatch`, async (span) => {
+		apply: (target, thisArg, argArray) =>
+			tracer.startActiveSpan(`Queues ${name} sendBatch`, async (span) => {
 				span.setAttribute('queue.operation', 'sendBatch')
-				await Reflect.apply(target, unwrap(thisArg), argArray)
-				span.end()
-			})
-		},
+				try {
+					return await Reflect.apply(target, unwrap(thisArg), argArray)
+				} catch (error) {
+					span.recordException(error as Error)
+					throw error
+				} finally {
+					span.end()
+				}
+			}),
 	}
 	return wrap(fn, handler)
 }

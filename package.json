@@ -1,21 +1,31 @@
 {
 	"name": "@inference-net/otel-cf-workers",
-	"version": "2.4.0",
+	"version": "3.0.0",
 	"module": "./dist/index.js",
 	"type": "module",
 	"types": "./dist/index.d.ts",
-	"exports": "./dist/index.js",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
 	"scripts": {
 		"clean": "rm -rf ./dist",
 		"format": "prettier --ignore-unknown --write .",
+		"format:check": "prettier . --check --ignore-unknown",
 		"build": "vite build",
-		"release": "yarn clean && changeset version && yarn build && yarn test && yarn check && changeset publish",
-		"check": "prettier . --check --ignore-unknown && tsc --noEmit",
+		"check:types": "tsc --noEmit",
+		"check": "bun run format:check && bun run check:types",
 		"watch": "vite build --watch",
-		"prepare": "husky",
+		"prepare": "command -v husky >/dev/null && husky || true",
 		"test": "vitest run",
 		"test:dev": "vitest",
-		"ci": "yarn clean && yarn build && yarn test && yarn check"
+		"lint-staged": "lint-staged",
+		"ci": "bun run clean && bun run check && bun run build && bun run test",
+		"changeset": "changeset",
+		"version": "changeset version",
+		"release": "changeset publish"
 	},
 	"files": [
 		"dist"
@@ -31,19 +41,25 @@
 		"@opentelemetry/semantic-conventions": "^1.33"
 	},
 	"devDependencies": {
-		"@cloudflare/vitest-pool-workers": "^0.10.8",
+		"@changesets/cli": "^2.29.8",
+		"@cloudflare/vitest-pool-workers": "0.21.3",
 		"@cloudflare/workers-types": "^4.20251119.0",
+		"@effect/vitest": "4.0.0-rc.109",
 		"@opentelemetry/api": "~1.9.0",
+		"effect": "4.0.0-rc.109",
 		"husky": "^9.1.7",
 		"lint-staged": "^15.5.2",
+		"oxfmt": "^0.63.0",
+		"oxlint": "^1.78.0",
 		"prettier": "^3.5.3",
 		"typescript": "5",
 		"vite": "^7.2.2",
 		"vite-plugin-dts": "^4.5.4",
-		"vitest": "3.2.0"
+		"vitest": "4.1.10"
 	},
 	"peerDependencies": {
-		"@opentelemetry/api": "~1.9.0"
+		"@opentelemetry/api": "~1.9.0",
+		"effect": "4.0.0-rc.109"
 	},
 	"publishConfig": {
 		"access": "public"
@@ -52,5 +68,5 @@
 	"lint-staged": {
 		"*": "prettier --ignore-unknown --write"
 	},
-	"packageManager": "yarn@4.11.0"
+	"packageManager": "bun@canary"
 }

@@ -5,7 +5,7 @@ OpenTelemetry instrumentation for Cloudflare Workers with automatic **tracing** 
 ## Installation
 
 ```bash
-yarn add @inference-net/otel-cf-workers @opentelemetry/api
+bun add @inference-net/otel-cf-workers @opentelemetry/api effect@rc
 ```
 
 ## Requirements

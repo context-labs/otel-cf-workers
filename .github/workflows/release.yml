@@ -2,19 +2,10 @@ name: Release
 
 on:
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version bump type'
-        required: true
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
 
 jobs:
   release:
-    name: 'Release to npm'
+    name: 'Release package'
     timeout-minutes: 30
     runs-on: ubuntu-latest
     permissions:
@@ -26,17 +17,15 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: yarn/action-setup@v4
-
-      - name: Use Node.js 20
-        uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: 20
-          cache: 'yarn'
-          registry-url: 'https://registry.npmjs.org'
+          bun-version: 'canary'
+
+      - name: Report Bun revision
+        run: bun --version && bun --revision
 
       - name: 'Install dependencies'
-        run: 'yarn install --frozen-lockfile'
+        run: bun install --frozen-lockfile
 
       - name: 'Configure git'
         run: |
@@ -44,23 +33,29 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: 'Version bump'
-        run: 'yarn version --${{ inputs.version }} --no-git-tag-version'
+        run: bun run version
 
-      - name: 'Build'
-        run: 'yarn build'
+      - name: Format and type check
+        run: bun run check
 
-      - name: 'Run tests'
-        run: 'yarn test'
+      - name: Build
+        run: bun run build
+
+      - name: Run tests
+        run: bun run test
+
+      - name: Inspect package
+        run: bun pm pack --dry-run
+
+      - name: Publish package
+        run: bun publish --access public --frozen-lockfile
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: 'Commit version bump'
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          git add package.json
+          VERSION=$(bun -e 'console.log(require("./package.json").version)')
+          git add package.json bun.lock CHANGELOG.md .changeset
           git commit -m "Release v${VERSION}"
           git tag "v${VERSION}"
           git push origin main --tags
-
-      - name: 'Publish to npm'
-        run: 'yarn publish --access public'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

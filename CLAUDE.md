@@ -199,7 +199,7 @@ The library automatically detects Worker version metadata from the environment:
 ### Installation
 
 ```bash
-yarn add @inference-net/otel-cf-workers @opentelemetry/api
+bun add @inference-net/otel-cf-workers @opentelemetry/api effect@rc
 ```
 
 ### Basic Worker Instrumentation
@@ -663,8 +663,8 @@ postProcessor: (spans) => {
 The library uses Vitest with `@cloudflare/vitest-pool-workers` for testing:
 
 ```bash
-yarn test      # Run tests once
-yarn test:dev  # Watch mode
+bun run test      # Run tests once
+bun run test:dev  # Watch mode
 ```
 
 Tests run in a simulated Workers environment to ensure compatibility.
@@ -672,13 +672,13 @@ Tests run in a simulated Workers environment to ensure compatibility.
 ## Development Commands
 
 ```bash
-yarn build          # Build library (tsup + version metadata)
-yarn clean          # Remove build artifacts
-yarn format         # Format code with Prettier
-yarn check          # Run all checks (types + format)
-yarn check:types    # TypeScript type checking
-yarn watch          # Watch mode for development
-yarn ci             # Full CI workflow (clean + build + check)
+bun run build          # Build library (Vite + version metadata)
+bun run clean          # Remove build artifacts
+bun run format         # Format code with Prettier
+bun run check          # Run all checks (types + format)
+bun run check:types    # TypeScript type checking
+bun run watch          # Watch mode for development
+bun run ci             # Full CI workflow (clean + check + build + test)
 ```
 
 ## When to Use This Library

@@ -1,20 +1,8 @@
 {
 	"compilerOptions": {
-		"target": "ES2021",
-		"module": "ESNext",
-		"lib": ["ES2021", "ES2022.Array"],
-		"jsx": "react",
-		"types": ["./worker-configuration.d.ts", "vitest/globals", "@cloudflare/vitest-pool-workers"],
-		"moduleResolution": "node",
-		"resolveJsonModule": true,
-		"allowSyntheticDefaultImports": true,
-		"esModuleInterop": true,
-		"strict": true,
-		"skipLibCheck": true,
-		"forceConsistentCasingInFileNames": true,
-		"allowJs": true,
-		"noEmit": true
+		"moduleResolution": "bundler",
+		"types": ["@cloudflare/vitest-pool-workers/types"]
 	},
-	"include": ["worker-configuration.d.ts", "src/**/*.ts", "test/**/*.ts", "test/**/*.d.ts"],
-	"exclude": ["node_modules", "dist", ".wrangler"]
+	"extends": "../tsconfig.json",
+	"include": ["./**/*.ts", "./**/*.d.ts"]
 }
