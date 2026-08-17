@@ -1,4 +1,4 @@
-import { Attributes, SpanKind, SpanOptions, trace } from '@opentelemetry/api'
+import { Attributes, Exception, SpanKind, SpanOptions, SpanStatusCode, trace } from '@opentelemetry/api'
 import { wrap } from '../wrap'
 import { Overloads } from './common'
 import {
@@ -185,13 +185,37 @@ function instrumentStorageFn(fn: Function, operation: string) {
 				kind: SpanKind.CLIENT,
 				attributes,
 			}
+			if (operation === 'transactionSync') {
+				return tracer.startActiveSpan(`Durable Object Storage ${operation}`, options, (span) => {
+					try {
+						const result = Reflect.apply(target, thisArg, argArray)
+						span.setStatus({ code: SpanStatusCode.OK })
+						return result
+					} catch (error) {
+						span.recordException(error as Exception)
+						span.setStatus({ code: SpanStatusCode.ERROR })
+						throw error
+					} finally {
+						span.end()
+					}
+				})
+			}
+
 			return tracer.startActiveSpan(`Durable Object Storage ${operation}`, options, async (span) => {
-				const result = await Reflect.apply(target, thisArg, argArray)
-				const extraAttrsFn = StorageAttributes[operation]
-				const extraAttrs = extraAttrsFn ? extraAttrsFn(argArray, result) : {}
-				span.setAttributes(extraAttrs)
-				span.end()
-				return result
+				try {
+					const result = await Reflect.apply(target, thisArg, argArray)
+					const extraAttrsFn = StorageAttributes[operation]
+					const extraAttrs = extraAttrsFn ? extraAttrsFn(argArray, result) : {}
+					span.setAttributes(extraAttrs)
+					span.setStatus({ code: SpanStatusCode.OK })
+					return result
+				} catch (error) {
+					span.recordException(error as Exception)
+					span.setStatus({ code: SpanStatusCode.ERROR })
+					throw error
+				} finally {
+					span.end()
+				}
 			})
 		},
 	}

@@ -86,6 +86,16 @@ const worker = {
 			return new Response('fetched')
 		}
 
+		if (url.pathname === '/response/error') {
+			return new Response('unavailable', {
+				status: 503,
+				headers: {
+					'content-length': '11',
+					'content-type': 'text/plain',
+				},
+			})
+		}
+
 		return new Response('not found', { status: 404 })
 	},
 } satisfies ExportedHandler<Env>

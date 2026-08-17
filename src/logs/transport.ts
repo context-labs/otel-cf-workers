@@ -93,12 +93,13 @@ export class OTLPTransport implements LogTransport {
 		}
 
 		const response = await this.fetch(this.url, params)
-
-		if (!response.ok) {
-			throw new OTLPExporterError(`Exporter received a statusCode: ${response.status}`)
+		try {
+			if (!response.ok) {
+				throw new OTLPExporterError(`Exporter received a statusCode: ${response.status}`)
+			}
+		} finally {
+			await response.body?.cancel()
 		}
-
-		await response.body?.cancel()
 	}
 
 	private transformToOTLP(logs: ReadableLogRecord[]): any {

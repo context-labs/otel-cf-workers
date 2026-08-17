@@ -3,5 +3,6 @@
 	"singleQuote": true,
 	"arrowParens": "always",
 	"printWidth": 120,
-	"useTabs": true
+	"useTabs": true,
+	"ignorePatterns": [".repos/**"]
 }

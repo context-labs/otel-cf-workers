@@ -4,6 +4,7 @@ import { InMemorySpanExporter, ReadableSpan } from '@opentelemetry/sdk-trace-bas
 import { OTLPExporter } from '../../src/exporter'
 import { OTLPTransport } from '../../src/logs/transport'
 import type { ReadableLogRecord } from '../../src/logs/types'
+import { instrument, type InstrumentRuntimeOptions, type WorkerOtelConfig } from '../../src/index'
 
 function exportSpans(exporter: OTLPExporter, spans: ReadableSpan[]): Promise<void> {
 	return new Promise((resolve, reject) => {
@@ -67,6 +68,98 @@ it.effect('routes log exports through the supplied fetcher', () =>
 				},
 			])
 			expect(binding.called).toBe(true)
+		},
+		catch: (cause) => cause,
+	}),
+)
+
+const publicConfig: WorkerOtelConfig = {
+	service: { name: 'telemetry-fetcher-test' },
+	trace: {
+		exporter: { url: 'https://collector.internal/v1/traces' },
+		instrumentation: { instrumentGlobalCache: false, instrumentGlobalFetch: false },
+	},
+}
+
+function executionContext(): ExecutionContext & { pending: Promise<unknown>[] } {
+	const pending: Promise<unknown>[] = []
+	return {
+		pending,
+		waitUntil(promise: Promise<unknown>) {
+			pending.push(promise)
+		},
+		passThroughOnException() {},
+		props: {},
+	} as unknown as ExecutionContext & { pending: Promise<unknown>[] }
+}
+
+async function exercisePublicTelemetryFetcher(options: InstrumentRuntimeOptions<Record<string, unknown>>) {
+	const handler = instrument(
+		{
+			async fetch() {
+				return new Response('ok')
+			},
+		},
+		publicConfig,
+		options,
+	)
+	const ctx = executionContext()
+	await handler.fetch!(new Request('https://worker.example'), {}, ctx)
+	await Promise.all(ctx.pending)
+}
+
+it.effect('reads a direct telemetry Fetcher through the public instrument API', () =>
+	Effect.tryPromise({
+		try: async () => {
+			const binding = {
+				accessed: false,
+				get fetch(): typeof globalThis.fetch {
+					this.accessed = true
+					return () => Promise.resolve(new Response(null, { status: 200 }))
+				},
+			}
+			const fetcher = binding as unknown as Fetcher
+
+			await exercisePublicTelemetryFetcher({ telemetryFetcher: fetcher })
+			expect(binding.accessed).toBe(true)
+		},
+		catch: (cause) => cause,
+	}),
+)
+
+it.effect('resolves a telemetry Fetcher from the handler environment', () =>
+	Effect.tryPromise({
+		try: async () => {
+			const env = { marker: 'expected' }
+			let resolvedEnv: Record<string, unknown> | undefined
+			const binding = {
+				accessed: false,
+				get fetch(): typeof globalThis.fetch {
+					this.accessed = true
+					return () => Promise.resolve(new Response(null, { status: 200 }))
+				},
+			}
+			const fetcher = binding as unknown as Fetcher
+			const handler = instrument(
+				{
+					async fetch() {
+						return new Response('ok')
+					},
+				},
+				publicConfig,
+				{
+					telemetryFetcher: (receivedEnv) => {
+						resolvedEnv = receivedEnv
+						return fetcher
+					},
+				},
+			)
+			const ctx = executionContext()
+			await handler.fetch!(new Request('https://worker.example'), env, ctx)
+			await Promise.all(ctx.pending)
+
+			expect(resolvedEnv).toBe(env)
+			expect(binding.accessed).toBe(true)
 		},
 		catch: (cause) => cause,
 	}),

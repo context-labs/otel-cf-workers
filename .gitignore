@@ -118,4 +118,3 @@ examples/worker/.dev.vars
 examples/queue/.dev.vars
 versions.json
 .wrangler-logs
-.repos/effect

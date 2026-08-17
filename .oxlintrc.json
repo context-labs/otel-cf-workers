@@ -1,7 +1,7 @@
 {
 	"$schema": "./node_modules/oxlint/configuration_schema.json",
 	"plugins": ["import"],
-	"ignorePatterns": ["**/coverage/**", "**/dist/**", "node_modules/**"],
+	"ignorePatterns": [".repos/**", "**/coverage/**", "**/dist/**", "node_modules/**"],
 	"rules": {
 		"no-useless-catch": "off",
 		"no-unused-vars": "off",

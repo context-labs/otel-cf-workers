@@ -429,9 +429,8 @@ function instrumentDurableObject(doObj: DO, initialiser: Initialiser, env: Env, 
 			} else {
 				const result = Reflect.get(target, prop)
 				if (typeof result === 'function' && typeof prop === 'string') {
-					result.bind(doObj)
 					// Instrument as RPC handler method (server-side)
-					return instrumentRpcHandlerMethod(result, prop, initialiser, env, state.id)
+					return instrumentRpcHandlerMethod(result.bind(doObj), prop, initialiser, env, state.id)
 				}
 				return result
 			}

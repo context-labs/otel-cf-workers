@@ -21,8 +21,12 @@ class TraceState {
 	private readonly exportPromises = new Set<Promise<void>>()
 	private localRootSpan?: ReadableSpan
 	private traceDecision?: boolean
+	private flushPromise?: Promise<void>
 
-	constructor(exporter: SpanExporter) {
+	constructor(
+		exporter: SpanExporter,
+		private readonly tailSampler?: TailSampleFn,
+	) {
 		this.exporter = exporter
 	}
 
@@ -47,7 +51,7 @@ class TraceState {
 
 	sample() {
 		if (this.traceDecision === undefined && this.unexportedSpans.length > 0) {
-			const sampler = getSampler()
+			const sampler = this.tailSampler ?? getSampler()
 			this.traceDecision = sampler({
 				traceId: this.localRootSpan!.spanContext().traceId,
 				localRootSpan: this.localRootSpan!,
@@ -57,7 +61,22 @@ class TraceState {
 		this.unexportedSpans = this.traceDecision ? this.unexportedSpans : []
 	}
 
-	async flush(): Promise<void> {
+	flush(): Promise<void> {
+		if (this.flushPromise) return this.flushPromise
+		const flushPromise = Promise.resolve().then(() => this.flushInternal())
+		this.flushPromise = flushPromise
+		void flushPromise.then(
+			() => {
+				if (this.flushPromise === flushPromise) this.flushPromise = undefined
+			},
+			() => {
+				if (this.flushPromise === flushPromise) this.flushPromise = undefined
+			},
+		)
+		return flushPromise
+	}
+
+	private async flushInternal(): Promise<void> {
 		if (this.unexportedSpans.length > 0) {
 			const unfinishedSpans = this.unexportedSpans.filter((span) => this.isSpanInProgress(span)) as unknown as Span[]
 			for (const span of unfinishedSpans) {
@@ -65,12 +84,14 @@ class TraceState {
 				span.end()
 			}
 			this.sample()
-			const exportPromise = this.exportSpans(this.unexportedSpans)
-			this.exportPromises.add(exportPromise)
-			void exportPromise.then(
-				() => this.exportPromises.delete(exportPromise),
-				() => this.exportPromises.delete(exportPromise),
-			)
+			if (this.unexportedSpans.length > 0) {
+				const exportPromise = this.exportSpans(this.unexportedSpans)
+				this.exportPromises.add(exportPromise)
+				void exportPromise.then(
+					() => this.exportPromises.delete(exportPromise),
+					() => this.exportPromises.delete(exportPromise),
+				)
+			}
 			this.unexportedSpans = []
 		}
 		if (this.exportPromises.size > 0) {
@@ -105,10 +126,13 @@ type traceId = string
 export class BatchTraceSpanProcessor implements TraceFlushableSpanProcessor {
 	private traces: Record<traceId, TraceState> = {}
 
-	constructor(private exporter: SpanExporter) {}
+	constructor(
+		private exporter: SpanExporter,
+		private readonly tailSampler?: TailSampleFn,
+	) {}
 
 	getTraceState(traceId: string): TraceState {
-		const traceState = this.traces[traceId] || new TraceState(this.exporter)
+		const traceState = this.traces[traceId] || new TraceState(this.exporter, this.tailSampler)
 		this.traces[traceId] = traceState
 		return traceState
 	}

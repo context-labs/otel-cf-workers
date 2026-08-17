@@ -120,10 +120,12 @@ export class SpanImpl implements Span, ReadableSpan {
 	}
 
 	addLink(link: Link): this {
+		if (this._ended) return this
 		this.links.push(link)
 		return this
 	}
 	addLinks(links: Link[]): this {
+		if (this._ended) return this
 		this.links.push(...links)
 		return this
 	}
@@ -133,6 +135,7 @@ export class SpanImpl implements Span, ReadableSpan {
 	}
 
 	setAttribute(key: string, value?: AttributeValue): this {
+		if (this._ended) return this
 		if (isAttributeKey(key) && isAttributeValue(value)) {
 			this.attributes[key] = value
 		}
@@ -147,6 +150,7 @@ export class SpanImpl implements Span, ReadableSpan {
 	}
 
 	addEvent(name: string, attributesOrStartTime?: Attributes | TimeInput, startTime?: TimeInput): this {
+		if (this._ended) return this
 		if (isTimeInput(attributesOrStartTime)) {
 			startTime = attributesOrStartTime
 			attributesOrStartTime = undefined
@@ -159,11 +163,13 @@ export class SpanImpl implements Span, ReadableSpan {
 	}
 
 	setStatus(status: SpanStatus): this {
+		if (this._ended) return this
 		this.status = status
 		return this
 	}
 
 	updateName(name: string): this {
+		if (this._ended) return this
 		this.name = name
 		return this
 	}

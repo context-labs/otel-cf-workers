@@ -410,7 +410,7 @@ const handler = {
 ## Limitations
 
 - **Timing Accuracy**: The Workers runtime does not expose accurate timing information to protect against Spectre attacks. CPU-bound work may show 0ms duration. The clock only updates on I/O operations.
-- **RPC-Style DO Calls**: Direct RPC method calls to Durable Objects (e.g., `await stub.myMethod()`) are not auto-instrumented. Use fetch-style calls (`await stub.fetch(request)`) for automatic tracing.
+- **RPC Compatibility**: Direct RPC calls between instrumented Durable Object stubs and classes are traced automatically. Both the calling Worker and Durable Object class must use this library so the internal trace-context carrier is injected and removed transparently.
 
 ## Examples
 

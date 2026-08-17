@@ -1,4 +1,4 @@
-import { Attributes, SpanKind, SpanOptions, trace } from '@opentelemetry/api'
+import { Attributes, Exception, SpanKind, SpanOptions, SpanStatusCode, trace } from '@opentelemetry/api'
 import { SemanticAttributes } from '@opentelemetry/semantic-conventions'
 import { wrap } from '../wrap'
 import {
@@ -112,29 +112,37 @@ function instrumentKVFn(fn: Function, name: string, operation: string) {
 				attributes,
 			}
 			return tracer.startActiveSpan(`KV ${name} ${operation}`, options, async (span) => {
-				const result = await Reflect.apply(target, thisArg, argArray)
-				const extraAttrsFn = KVAttributes[operation]
-				const extraAttrs = extraAttrsFn ? extraAttrsFn(argArray, result) : {}
-				span.setAttributes(extraAttrs)
+				try {
+					const result = await Reflect.apply(target, thisArg, argArray)
+					const extraAttrsFn = KVAttributes[operation]
+					const extraAttrs = extraAttrsFn ? extraAttrsFn(argArray, result) : {}
+					span.setAttributes(extraAttrs)
 
-				// Add key/keys attributes
-				if (operation === 'list') {
-					// No specific key for list operations
-				} else if (Array.isArray(argArray[0])) {
-					// Multi-key operation
-					const keys = argArray[0] as string[]
-					if (keys.length > 0 && keys[0]) {
-						span.setAttribute(ATTR_CLOUDFLARE_KV_QUERY_KEYS, keys[0])
-						span.setAttribute(ATTR_CLOUDFLARE_KV_QUERY_KEYS_COUNT, keys.length)
+					// Add key/keys attributes
+					if (operation === 'list') {
+						// No specific key for list operations
+					} else if (Array.isArray(argArray[0])) {
+						// Multi-key operation
+						const keys = argArray[0] as string[]
+						if (keys.length > 0 && keys[0]) {
+							span.setAttribute(ATTR_CLOUDFLARE_KV_QUERY_KEYS, keys[0])
+							span.setAttribute(ATTR_CLOUDFLARE_KV_QUERY_KEYS_COUNT, keys.length)
+						}
+					} else if (argArray[0] && typeof argArray[0] === 'string') {
+						// Single key operation
+						span.setAttribute(ATTR_CLOUDFLARE_KV_QUERY_KEYS, argArray[0])
+						span.setAttribute(ATTR_CLOUDFLARE_KV_QUERY_KEYS_COUNT, 1)
 					}
-				} else if (argArray[0] && typeof argArray[0] === 'string') {
-					// Single key operation
-					span.setAttribute(ATTR_CLOUDFLARE_KV_QUERY_KEYS, argArray[0])
-					span.setAttribute(ATTR_CLOUDFLARE_KV_QUERY_KEYS_COUNT, 1)
-				}
 
-				span.end()
-				return result
+					span.setStatus({ code: SpanStatusCode.OK })
+					return result
+				} catch (error) {
+					span.recordException(error as Exception)
+					span.setStatus({ code: SpanStatusCode.ERROR })
+					throw error
+				} finally {
+					span.end()
+				}
 			})
 		},
 	}

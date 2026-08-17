@@ -130,10 +130,12 @@ export function gatherRequestAttributes(request: Request): Attributes {
 export function gatherResponseAttributes(response: Response): Attributes {
 	const attrs: Record<string, string | number> = {}
 	attrs['http.response.status_code'] = response.status
-	if (response.headers.get('content-length')! == null) {
-		attrs['http.response.body.size'] = response.headers.get('content-length')!
+	const contentLength = response.headers.get('content-length')
+	if (contentLength !== null) {
+		attrs['http.response.body.size'] = parseInt(contentLength, 10)
 	}
-	attrs['http.mime_type'] = response.headers.get('content-type')!
+	const contentType = response.headers.get('content-type')
+	if (contentType !== null) attrs['http.mime_type'] = contentType
 	return attrs
 }
 

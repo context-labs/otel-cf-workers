@@ -128,7 +128,7 @@ export function instrumentD1Fn(fn: Function, dbName: string, operation: string) 
 			} else if (operation === 'batch') {
 				// Create span for each statement, requires peeaking into D1 internals ...
 				const statements = argArray[0] as D1StatementInternals[]
-				return tracer.startActiveSpan(`${dbName} ${operation}`, async (span) => {
+				return tracer.startActiveSpan(`${dbName} ${operation}`, spanOptions(dbName, operation), async (span) => {
 					// Add batch size attribute
 					span.setAttribute(ATTR_DB_OPERATION_BATCH_SIZE, statements.length)
 

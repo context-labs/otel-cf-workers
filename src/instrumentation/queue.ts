@@ -13,27 +13,37 @@ class MessageStatusCount {
 	implicitly_acked = 0
 	implicitly_retried = 0
 	readonly total: number
+	private readonly statuses = new WeakMap<Message, 'acked' | 'retried'>()
+	private finalized = false
 
 	constructor(total: number) {
 		this.total = total
 	}
 
-	ack() {
+	ack(message: Message) {
+		if (this.finalized || this.statuses.has(message)) return
+		this.statuses.set(message, 'acked')
 		this.succeeded = this.succeeded + 1
 	}
 
 	ackRemaining() {
+		if (this.finalized) return
 		this.implicitly_acked = this.total - this.succeeded - this.failed
 		this.succeeded = this.total - this.failed
+		this.finalized = true
 	}
 
-	retry() {
+	retry(message: Message) {
+		if (this.finalized || this.statuses.has(message)) return
+		this.statuses.set(message, 'retried')
 		this.failed = this.failed + 1
 	}
 
 	retryRemaining() {
+		if (this.finalized) return
 		this.implicitly_retried = this.total - this.succeeded - this.failed
 		this.failed = this.total - this.succeeded
+		this.finalized = true
 	}
 
 	toAttributes(): Attributes {
@@ -63,22 +73,22 @@ const proxyQueueMessage = <Q>(msg: Message<Q>, count: MessageStatusCount): Messa
 			if (prop === 'ack') {
 				const ackFn = Reflect.get(target, prop)
 				return new Proxy(ackFn, {
-					apply: (fnTarget) => {
+					apply: (fnTarget, _thisArg, argArray) => {
 						addEvent('messageAck', msg)
-						count.ack()
+						count.ack(msg)
 
 						//TODO: handle errors
-						Reflect.apply(fnTarget, msg, [])
+						return Reflect.apply(fnTarget, msg, argArray)
 					},
 				})
 			} else if (prop === 'retry') {
 				const retryFn = Reflect.get(target, prop)
 				return new Proxy(retryFn, {
-					apply: (fnTarget) => {
+					apply: (fnTarget, _thisArg, argArray) => {
 						addEvent('messageRetry', msg)
-						count.retry()
+						count.retry(msg)
 						//TODO: handle errors
-						const result = Reflect.apply(fnTarget, msg, [])
+						const result = Reflect.apply(fnTarget, msg, argArray)
 						return result
 					},
 				})
@@ -109,21 +119,21 @@ const proxyMessageBatch = (batch: MessageBatch, count: MessageStatusCount) => {
 			} else if (prop === 'ackAll') {
 				const ackFn = Reflect.get(target, prop)
 				return new Proxy(ackFn, {
-					apply: (fnTarget) => {
+					apply: (fnTarget, _thisArg, argArray) => {
 						addEvent('ackAll')
 						count.ackRemaining()
 						//TODO: handle errors
-						Reflect.apply(fnTarget, batch, [])
+						return Reflect.apply(fnTarget, batch, argArray)
 					},
 				})
 			} else if (prop === 'retryAll') {
 				const retryFn = Reflect.get(target, prop)
 				return new Proxy(retryFn, {
-					apply: (fnTarget) => {
+					apply: (fnTarget, _thisArg, argArray) => {
 						addEvent('retryAll')
 						count.retryRemaining()
 						//TODO: handle errors
-						Reflect.apply(fnTarget, batch, [])
+						return Reflect.apply(fnTarget, batch, argArray)
 					},
 				})
 			}

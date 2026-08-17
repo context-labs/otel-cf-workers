@@ -1,4 +1,4 @@
-import { Attributes, SpanKind, SpanOptions, trace } from '@opentelemetry/api'
+import { Attributes, Exception, Span, SpanKind, SpanOptions, SpanStatusCode, trace } from '@opentelemetry/api'
 import { wrap } from '../wrap'
 import {
 	ATTR_CLOUDFLARE_BINDING_TYPE,
@@ -50,6 +50,25 @@ import {
 } from '../constants'
 
 const dbSystem = 'Cloudflare R2'
+
+async function runAsyncOperation<T>(
+	span: Span,
+	operation: () => Promise<T>,
+	onSuccess?: (result: T) => void,
+): Promise<T> {
+	try {
+		const result = await operation()
+		onSuccess?.(result)
+		span.setStatus({ code: SpanStatusCode.OK })
+		return result
+	} catch (error) {
+		span.recordException(error as Exception)
+		span.setStatus({ code: SpanStatusCode.ERROR })
+		throw error
+	} finally {
+		span.end()
+	}
+}
 
 // Helper to add object metadata attributes
 function addObjectMetadata(attrs: Attributes, obj: R2Object | R2ObjectBody | null): void {
@@ -152,11 +171,14 @@ function instrumentHead(fn: R2Bucket['head'], name: string): R2Bucket['head'] {
 				attributes,
 			}
 			return tracer.startActiveSpan(`R2 ${name} head`, options, async (span) => {
-				const result = (await Reflect.apply(target, thisArg, argArray)) as R2Object | null
-				addObjectMetadata(attributes, result)
-				span.setAttributes(attributes)
-				span.end()
-				return result
+				return runAsyncOperation<R2Object | null>(
+					span,
+					() => Reflect.apply(target, thisArg, argArray) as Promise<R2Object | null>,
+					(result) => {
+						addObjectMetadata(attributes, result)
+						span.setAttributes(attributes)
+					},
+				)
 			})
 		},
 	}
@@ -201,11 +223,14 @@ function instrumentGet(fn: R2Bucket['get'], name: string): R2Bucket['get'] {
 				attributes,
 			}
 			return tracer.startActiveSpan(`R2 ${name} get`, options, async (span) => {
-				const result = (await Reflect.apply(target, thisArg, argArray)) as R2ObjectBody | null
-				addObjectMetadata(attributes, result)
-				span.setAttributes(attributes)
-				span.end()
-				return result
+				return runAsyncOperation<R2ObjectBody | null>(
+					span,
+					() => Reflect.apply(target, thisArg, argArray) as Promise<R2ObjectBody | null>,
+					(result) => {
+						addObjectMetadata(attributes, result)
+						span.setAttributes(attributes)
+					},
+				)
 			})
 		},
 	}
@@ -261,11 +286,14 @@ function instrumentPut(fn: R2Bucket['put'], name: string): R2Bucket['put'] {
 				attributes,
 			}
 			return tracer.startActiveSpan(`R2 ${name} put`, options, async (span) => {
-				const result = (await Reflect.apply(target, thisArg, argArray)) as R2Object
-				addObjectMetadata(attributes, result)
-				span.setAttributes(attributes)
-				span.end()
-				return result
+				return runAsyncOperation<R2Object>(
+					span,
+					() => Reflect.apply(target, thisArg, argArray) as Promise<R2Object>,
+					(result) => {
+						addObjectMetadata(attributes, result)
+						span.setAttributes(attributes)
+					},
+				)
 			})
 		},
 	}
@@ -301,8 +329,7 @@ function instrumentDelete(fn: R2Bucket['delete'], name: string): R2Bucket['delet
 				attributes,
 			}
 			return tracer.startActiveSpan(`R2 ${name} delete`, options, async (span) => {
-				await Reflect.apply(target, thisArg, argArray)
-				span.end()
+				return runAsyncOperation(span, () => Reflect.apply(target, thisArg, argArray))
 			})
 		},
 	}
@@ -349,18 +376,21 @@ function instrumentList(fn: R2Bucket['list'], name: string): R2Bucket['list'] {
 				attributes,
 			}
 			return tracer.startActiveSpan(`R2 ${name} list`, options, async (span) => {
-				const result = (await Reflect.apply(target, thisArg, argArray)) as R2Objects
-				attributes[ATTR_CLOUDFLARE_R2_LIST_TRUNCATED] = result.truncated
-				attributes[ATTR_CLOUDFLARE_R2_LIST_OBJECTS_COUNT] = result.objects.length
-				if (result.delimitedPrefixes) {
-					attributes[ATTR_CLOUDFLARE_R2_LIST_DELIMITED_PREFIXES_COUNT] = result.delimitedPrefixes.length
-				}
-				if (result.truncated && 'cursor' in result && result.cursor) {
-					attributes[ATTR_CLOUDFLARE_R2_LIST_CURSOR] = result.cursor
-				}
-				span.setAttributes(attributes)
-				span.end()
-				return result
+				return runAsyncOperation<R2Objects>(
+					span,
+					() => Reflect.apply(target, thisArg, argArray) as Promise<R2Objects>,
+					(result) => {
+						attributes[ATTR_CLOUDFLARE_R2_LIST_TRUNCATED] = result.truncated
+						attributes[ATTR_CLOUDFLARE_R2_LIST_OBJECTS_COUNT] = result.objects.length
+						if (result.delimitedPrefixes) {
+							attributes[ATTR_CLOUDFLARE_R2_LIST_DELIMITED_PREFIXES_COUNT] = result.delimitedPrefixes.length
+						}
+						if (result.truncated && 'cursor' in result && result.cursor) {
+							attributes[ATTR_CLOUDFLARE_R2_LIST_CURSOR] = result.cursor
+						}
+						span.setAttributes(attributes)
+					},
+				)
 			})
 		},
 	}
@@ -389,11 +419,14 @@ function instrumentCreateMultipartUpload(
 				attributes,
 			}
 			return tracer.startActiveSpan(`R2 ${name} createMultipartUpload`, options, async (span) => {
-				const result = (await Reflect.apply(target, thisArg, argArray)) as R2MultipartUpload
-				attributes[ATTR_CLOUDFLARE_R2_MULTIPART_UPLOAD_ID] = result.uploadId
-				span.setAttributes(attributes)
-				span.end()
-				return result
+				return runAsyncOperation<R2MultipartUpload>(
+					span,
+					() => Reflect.apply(target, thisArg, argArray) as Promise<R2MultipartUpload>,
+					(result) => {
+						attributes[ATTR_CLOUDFLARE_R2_MULTIPART_UPLOAD_ID] = result.uploadId
+						span.setAttributes(attributes)
+					},
+				)
 			})
 		},
 	}
@@ -423,10 +456,18 @@ function instrumentResumeMultipartUpload(
 				kind: SpanKind.CLIENT,
 				attributes,
 			}
-			return tracer.startActiveSpan(`R2 ${name} resumeMultipartUpload`, options, async (span) => {
-				const result = (await Reflect.apply(target, thisArg, argArray)) as R2MultipartUpload
-				span.end()
-				return result
+			return tracer.startActiveSpan(`R2 ${name} resumeMultipartUpload`, options, (span) => {
+				try {
+					const result = Reflect.apply(target, thisArg, argArray) as R2MultipartUpload
+					span.setStatus({ code: SpanStatusCode.OK })
+					return result
+				} catch (error) {
+					span.recordException(error as Exception)
+					span.setStatus({ code: SpanStatusCode.ERROR })
+					throw error
+				} finally {
+					span.end()
+				}
 			})
 		},
 	}
