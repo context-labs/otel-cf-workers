@@ -1,7 +1,6 @@
 {
 	"name": "new_style-do",
 	"version": "0.0.0",
-	"packageManager": "bun@canary",
 	"private": true,
 	"scripts": {
 		"deploy": "wrangler deploy",
@@ -13,5 +12,6 @@
 		"@types/node": "^24.10.1",
 		"typescript": "^5.9.3",
 		"wrangler": "^4.123.0"
-	}
+	},
+	"packageManager": "bun@canary"
 }

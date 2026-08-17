@@ -1,8 +1,13 @@
 {
 	"name": "@inference-net/otel-cf-workers",
 	"version": "3.0.0",
-	"module": "./dist/index.js",
+	"homepage": "https://github.com/context-labs/otel-cf-workers#readme",
+	"license": "BSD-3-Clause",
+	"files": [
+		"dist"
+	],
 	"type": "module",
+	"module": "./dist/index.js",
 	"types": "./dist/index.d.ts",
 	"exports": {
 		".": {
@@ -10,13 +15,17 @@
 			"import": "./dist/index.js"
 		}
 	},
+	"publishConfig": {
+		"access": "public"
+	},
 	"scripts": {
 		"clean": "rm -rf ./dist",
-		"format": "prettier --ignore-unknown --write .",
-		"format:check": "prettier . --check --ignore-unknown",
+		"format": "oxfmt --write .",
+		"format:check": "oxfmt --check .",
+		"lint": "oxlint .",
 		"build": "vite build",
 		"check:types": "tsc --noEmit",
-		"check": "bun run format:check && bun run check:types",
+		"check": "bun run format:check && bun run lint && bun run check:types",
 		"watch": "vite build --watch",
 		"prepare": "command -v husky >/dev/null && husky || true",
 		"test": "vitest run",
@@ -27,10 +36,6 @@
 		"version": "changeset version",
 		"release": "changeset publish"
 	},
-	"files": [
-		"dist"
-	],
-	"homepage": "https://github.com/context-labs/otel-cf-workers#readme",
 	"dependencies": {
 		"@opentelemetry/core": "^2.2",
 		"@opentelemetry/exporter-trace-otlp-http": "^0.208",
@@ -51,7 +56,6 @@
 		"lint-staged": "^15.5.2",
 		"oxfmt": "^0.63.0",
 		"oxlint": "^1.78.0",
-		"prettier": "^3.5.3",
 		"typescript": "5",
 		"vite": "^7.2.2",
 		"vite-plugin-dts": "^4.5.4",
@@ -61,12 +65,8 @@
 		"@opentelemetry/api": "~1.9.0",
 		"effect": "4.0.0-rc.109"
 	},
-	"publishConfig": {
-		"access": "public"
-	},
-	"license": "BSD-3-Clause",
 	"lint-staged": {
-		"*": "prettier --ignore-unknown --write"
+		"*": "oxfmt --write"
 	},
 	"packageManager": "bun@canary"
 }
