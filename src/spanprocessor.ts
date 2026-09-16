@@ -51,7 +51,7 @@ class TraceState {
 		this.unexportedSpans = this.traceDecision ? this.unexportedSpans : []
 	}
 
-	async flush(): Promise<void> {
+	async flush(): Promise<boolean> {
 		if (this.unexportedSpans.length > 0) {
 			const unfinishedSpans = this.unexportedSpans.filter((span) => this.isSpanInProgress(span)) as unknown as Span[]
 			for (const span of unfinishedSpans) {
@@ -62,9 +62,13 @@ class TraceState {
 			this.exportPromises.push(this.exportSpans(this.unexportedSpans))
 			this.unexportedSpans = []
 		}
-		if (this.exportPromises.length > 0) {
+		const exportCount = this.exportPromises.length
+		if (exportCount > 0) {
 			await Promise.allSettled(this.exportPromises)
 		}
+		return (
+			this.inprogressSpans.size === 0 && this.unexportedSpans.length === 0 && this.exportPromises.length === exportCount
+		)
 	}
 
 	private isSpanInProgress(span: ReadableSpan) {
@@ -110,11 +114,13 @@ export class BatchTraceSpanProcessor implements TraceFlushableSpanProcessor {
 	}
 
 	async forceFlush(traceId?: traceId): Promise<void> {
-		if (traceId) {
-			await this.getTraceState(traceId).flush()
-		} else {
-			const promises = Object.values(this.traces).map((traceState: TraceState) => traceState.flush)
-			await Promise.allSettled(promises)
+		if (!traceId) {
+			await Promise.allSettled(Object.keys(this.traces).map((id) => this.forceFlush(id)))
+			return
+		}
+		const state = this.traces[traceId]
+		if (state && (await state.flush()) && this.traces[traceId] === state) {
+			delete this.traces[traceId]
 		}
 	}
 
