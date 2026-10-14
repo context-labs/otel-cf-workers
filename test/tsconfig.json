@@ -4,7 +4,7 @@
 		"module": "ESNext",
 		"lib": ["ES2021", "ES2022.Array"],
 		"jsx": "react",
-		"types": ["./worker-configuration.d.ts", "vitest/globals", "@cloudflare/vitest-pool-workers"],
+		"types": ["./worker-configuration.d.ts", "vitest/globals", "@cloudflare/vitest-pool-workers/types"],
 		"moduleResolution": "node",
 		"resolveJsonModule": true,
 		"allowSyntheticDefaultImports": true,

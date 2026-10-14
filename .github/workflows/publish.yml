@@ -1,0 +1,64 @@
+name: Publish
+
+# Every push to main runs checks, then waits for approval on the `npm` environment
+# before bumping (patch) and publishing. Run manually to pick patch/minor/major.
+# Auth is npm trusted publishing (OIDC) - no NPM_TOKEN.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump'
+        required: true
+        type: choice
+        default: patch
+        options: [patch, minor, major]
+
+# Newer pending runs replace older ones waiting for approval.
+concurrency:
+  group: publish
+
+jobs:
+  check:
+    name: 'Checks'
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: corepack enable
+      - run: yarn install --immutable
+      - run: yarn ci
+
+  publish:
+    name: 'Publish to npm'
+    needs: check
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: corepack enable
+      - run: yarn install --immutable
+      - run: yarn build
+      # Trusted publishing needs npm >= 11.5.1
+      - run: npm install -g npm@latest
+      - name: 'Bump version'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          npm version ${{ inputs.bump || 'patch' }} -m "chore: release v%s"
+      - run: npm publish --access public
+      - run: git push --follow-tags
