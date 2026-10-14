@@ -21,6 +21,10 @@
 		"dist"
 	],
 	"homepage": "https://github.com/context-labs/otel-cf-workers#readme",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/context-labs/otel-cf-workers"
+	},
 	"dependencies": {
 		"@opentelemetry/core": "^2.2",
 		"@opentelemetry/exporter-trace-otlp-http": "^0.208",
