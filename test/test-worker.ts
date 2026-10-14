@@ -1,15 +1,22 @@
 import { DurableObject } from 'cloudflare:workers'
 import { InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base'
 
-import { instrument, instrumentDO, type ConfigurationOption } from '../src/index'
+import { BatchTraceSpanProcessor, instrument, instrumentDO, type ConfigurationOption } from '../src/index'
 
 export const spanExporter = new InMemorySpanExporter()
 export const spanProcessor = new SimpleSpanProcessor(spanExporter)
+// Holds per-trace state until a trace is flushed; tests assert it is released.
+export const traceProcessor = new BatchTraceSpanProcessor({
+	export: (_spans, callback) => callback({ code: 0 }),
+	shutdown: async () => {},
+})
+// Lets a test hold `rpcHeld` open while other invocations run.
+export const rpcGate = { started: () => {}, release: Promise.resolve() }
 
 const resolveTestConfig: ConfigurationOption = {
 	service: { name: 'otel-cf-workers-test' },
 	trace: {
-		spanProcessors: [spanProcessor],
+		spanProcessors: [spanProcessor, traceProcessor],
 		instrumentation: {
 			instrumentGlobalCache: false,
 			instrumentGlobalFetch: false,
@@ -40,7 +47,26 @@ class TestDurableObject extends DurableObject<Env> {
 			return Response.json({ size: list.size })
 		}
 
+		if (url.pathname === '/throw') {
+			throw new Error('fetch failed')
+		}
+
 		return new Response('not found', { status: 404 })
+	}
+
+	override async alarm(): Promise<void> {
+		await this.ctx.storage.get('do-key')
+	}
+
+	async rpcFail(): Promise<never> {
+		await this.ctx.storage.put('rpc-fail', Date.now())
+		throw new Error('rpc failed')
+	}
+
+	async rpcHeld(): Promise<{ ok: boolean }> {
+		rpcGate.started()
+		await rpcGate.release
+		return { ok: true }
 	}
 
 	async rpcPing(): Promise<{ ok: boolean }> {

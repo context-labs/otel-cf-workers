@@ -14,6 +14,8 @@ import { instrumentStorage } from './do-storage'
 import { DOConstructorTrigger } from '../types'
 import { ATTR_CLOUDFLARE_JSRPC_METHOD, ATTR_RPC_SYSTEM, ATTR_RPC_SERVICE, ATTR_RPC_METHOD } from '../constants'
 import { injectRpcContext, extractAndRemoveRpcContext } from './rpc-context'
+import { WorkerTracer } from '../tracer'
+import { getLogger } from '../logs/provider'
 
 import { DurableObject as DurableObjectClass } from 'cloudflare:workers'
 
@@ -248,8 +250,28 @@ export function instrumentState(state: DurableObjectState) {
 	return wrap(state, stateHandler)
 }
 
+/**
+ * Exports a Durable Object invocation's trace and releases the state the span processor keeps for
+ * it, as the Worker handlers do after each invocation (see `exportTelemetry`). Concurrent
+ * invocations in the isolate can share the trace, so it is exported once none of its spans are in
+ * progress rather than by ending them.
+ */
+async function exportInvocationTrace(traceId: string): Promise<void> {
+	const tracer = trace.getTracer('export')
+	if (tracer instanceof WorkerTracer) {
+		await scheduler.wait(1)
+		await tracer.flushWhenIdle(traceId)
+	}
+
+	const logger = getLogger('export')
+	if (logger && typeof logger.forceFlush === 'function') {
+		await logger.forceFlush()
+	}
+}
+
 let cold_start = true
-export function executeDOFetch(fetchFn: FetchFn, request: Request, id: DurableObjectId): Promise<Response> {
+export function executeDOFetch(fetchFn: FetchFn, request: Request, state: DurableObjectState): Promise<Response> {
+	const id = state.id
 	const spanContext = getParentContextFromHeaders(request.headers)
 
 	const tracer = trace.getTracer('DO fetchHandler')
@@ -273,20 +295,22 @@ export function executeDOFetch(fetchFn: FetchFn, request: Request, id: DurableOb
 				span.setStatus({ code: SpanStatusCode.OK })
 			}
 			span.setAttributes(gatherResponseAttributes(response))
-			span.end()
 
 			return response
 		} catch (error) {
 			span.recordException(error as Exception)
 			span.setStatus({ code: SpanStatusCode.ERROR })
-			span.end()
 			throw error
+		} finally {
+			span.end()
+			state.waitUntil(exportInvocationTrace(span.spanContext().traceId))
 		}
 	})
 	return promise
 }
 
-export function executeDOAlarm(alarmFn: NonNullable<AlarmFn>, id: DurableObjectId): Promise<void> {
+export function executeDOAlarm(alarmFn: NonNullable<AlarmFn>, state: DurableObjectState): Promise<void> {
+	const id = state.id
 	const tracer = trace.getTracer('DO alarmHandler')
 
 	const name = id.name || ''
@@ -298,18 +322,19 @@ export function executeDOAlarm(alarmFn: NonNullable<AlarmFn>, id: DurableObjectI
 
 		try {
 			await alarmFn()
-			span.end()
 		} catch (error) {
 			span.recordException(error as Exception)
 			span.setStatus({ code: SpanStatusCode.ERROR })
-			span.end()
 			throw error
+		} finally {
+			span.end()
+			state.waitUntil(exportInvocationTrace(span.spanContext().traceId))
 		}
 	})
 	return promise
 }
 
-function instrumentFetchFn(fetchFn: FetchFn, initialiser: Initialiser, env: Env, id: DurableObjectId): FetchFn {
+function instrumentFetchFn(fetchFn: FetchFn, initialiser: Initialiser, env: Env, state: DurableObjectState): FetchFn {
 	const fetchHandler: ProxyHandler<FetchFn> = {
 		async apply(target, thisArg, argArray: Parameters<FetchFn>) {
 			const request = argArray[0]
@@ -317,7 +342,7 @@ function instrumentFetchFn(fetchFn: FetchFn, initialiser: Initialiser, env: Env,
 			const context = setConfig(config)
 			try {
 				const bound = target.bind(unwrap(thisArg))
-				return await api_context.with(context, executeDOFetch, undefined, bound, request, id)
+				return await api_context.with(context, executeDOFetch, undefined, bound, request, state)
 			} catch (error) {
 				throw error
 			}
@@ -326,7 +351,7 @@ function instrumentFetchFn(fetchFn: FetchFn, initialiser: Initialiser, env: Env,
 	return wrap(fetchFn, fetchHandler)
 }
 
-function instrumentAlarmFn(alarmFn: AlarmFn, initialiser: Initialiser, env: Env, id: DurableObjectId) {
+function instrumentAlarmFn(alarmFn: AlarmFn, initialiser: Initialiser, env: Env, state: DurableObjectState) {
 	if (!alarmFn) return undefined
 
 	const alarmHandler: ProxyHandler<NonNullable<AlarmFn>> = {
@@ -335,7 +360,7 @@ function instrumentAlarmFn(alarmFn: AlarmFn, initialiser: Initialiser, env: Env,
 			const context = setConfig(config)
 			try {
 				const bound = target.bind(unwrap(thisArg))
-				return await api_context.with(context, executeDOAlarm, undefined, bound, id)
+				return await api_context.with(context, executeDOAlarm, undefined, bound, state)
 			} catch (error) {
 				throw error
 			}
@@ -349,9 +374,10 @@ function instrumentRpcHandlerMethod(
 	methodName: string,
 	initialiser: Initialiser,
 	env: Env,
-	id: DurableObjectId,
+	state: DurableObjectState,
 ): Function {
 	if (!fn) return fn
+	const id = state.id
 
 	const fnHandler: ProxyHandler<Function> = {
 		async apply(target, thisArg, argArray) {
@@ -405,6 +431,7 @@ function instrumentRpcHandlerMethod(
 						throw error
 					} finally {
 						span.end()
+						state.waitUntil(exportInvocationTrace(span.spanContext().traceId))
 					}
 				})
 			}
@@ -422,16 +449,16 @@ function instrumentDurableObject(doObj: DO, initialiser: Initialiser, env: Env, 
 			// This proxy mainly handles fetch, alarm, and RPC method wrapping
 			if (prop === 'fetch') {
 				const fetchFn = Reflect.get(target, prop)
-				return instrumentFetchFn(fetchFn, initialiser, env, state.id)
+				return instrumentFetchFn(fetchFn, initialiser, env, state)
 			} else if (prop === 'alarm') {
 				const alarmFn = Reflect.get(target, prop)
-				return instrumentAlarmFn(alarmFn, initialiser, env, state.id)
+				return instrumentAlarmFn(alarmFn, initialiser, env, state)
 			} else {
 				const result = Reflect.get(target, prop)
 				if (typeof result === 'function' && typeof prop === 'string') {
 					result.bind(doObj)
 					// Instrument as RPC handler method (server-side)
-					return instrumentRpcHandlerMethod(result, prop, initialiser, env, state.id)
+					return instrumentRpcHandlerMethod(result, prop, initialiser, env, state)
 				}
 				return result
 			}

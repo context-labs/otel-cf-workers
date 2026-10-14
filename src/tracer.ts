@@ -17,6 +17,7 @@ import { SpanProcessor, RandomIdGenerator, ReadableSpan, SamplingDecision } from
 import { SpanImpl } from './span'
 import { getActiveConfig } from './config'
 import { TraceFlushableSpanProcessor } from './types'
+import { BatchTraceSpanProcessor } from './spanprocessor'
 
 enum NewTraceFlags {
 	RANDOM_TRACE_ID_SET = 2,
@@ -44,6 +45,18 @@ export class WorkerTracer implements Tracer {
 	async forceFlush(traceId?: string) {
 		const promises = this.spanProcessors.map(async (spanProcessor) => {
 			await spanProcessor.forceFlush(traceId)
+		})
+		await Promise.allSettled(promises)
+	}
+
+	/** Like `forceFlush(traceId)`, but leaves spans that are still in progress open. */
+	async flushWhenIdle(traceId: string) {
+		const promises = this.spanProcessors.map(async (spanProcessor) => {
+			if (spanProcessor instanceof BatchTraceSpanProcessor) {
+				await spanProcessor.flushWhenIdle(traceId)
+			} else {
+				await spanProcessor.forceFlush(traceId)
+			}
 		})
 		await Promise.allSettled(promises)
 	}
