@@ -20,6 +20,7 @@ class TraceState {
 	private exportPromises: Promise<void>[] = []
 	private localRootSpan?: ReadableSpan
 	private traceDecision?: boolean
+	releaseWhenIdle = false
 
 	constructor(exporter: SpanExporter) {
 		this.exporter = exporter
@@ -37,6 +38,10 @@ class TraceState {
 		if (this.inprogressSpans.size === 0) {
 			this.flush()
 		}
+	}
+
+	get idle(): boolean {
+		return this.inprogressSpans.size === 0
 	}
 
 	sample() {
@@ -110,7 +115,25 @@ export class BatchTraceSpanProcessor implements TraceFlushableSpanProcessor {
 
 	onEnd(span: ReadableSpan): void {
 		const traceId = span.spanContext().traceId
-		this.getTraceState(traceId).endSpan(span)
+		const state = this.getTraceState(traceId)
+		state.endSpan(span)
+		if (state.releaseWhenIdle && state.idle) {
+			void this.forceFlush(traceId)
+		}
+	}
+
+	/**
+	 * Exports a trace and releases its state once none of its spans are in progress: now if it is
+	 * idle, otherwise when its last open span ends. Unlike `forceFlush`, never ends open spans.
+	 */
+	async flushWhenIdle(traceId: traceId): Promise<void> {
+		const state = this.traces[traceId]
+		if (!state) return
+		if (state.idle) {
+			await this.forceFlush(traceId)
+		} else {
+			state.releaseWhenIdle = true
+		}
 	}
 
 	async forceFlush(traceId?: traceId): Promise<void> {

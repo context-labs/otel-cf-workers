@@ -1,5 +1,12 @@
 # @inference-net/otel-cf-workers
 
+## 2.5.2
+
+### Patch Changes
+
+- Durable Objects: export and release each invocation's trace after RPC methods (including `webSocket*` handlers), `fetch` and `alarm` end, as the Worker handlers do. Trace state previously stayed in the isolate-global span processor for good, so a busy Durable Object grew until it hit the 128 MB isolate limit. A trace with a span still in progress, e.g. from a concurrent invocation, is exported when its last span ends instead of having its open spans ended early.
+- Remove a leftover `console.log` of the worker version metadata on initialisation.
+
 ## 2.0.0-alpha.1
 
 - 0000000: Forked and started upgrade work!
