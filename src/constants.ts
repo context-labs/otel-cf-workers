@@ -324,3 +324,24 @@ export const SEVERITY_NUMBERS = {
 } as const
 
 export type SeverityNumber = (typeof SEVERITY_NUMBERS)[keyof typeof SEVERITY_NUMBERS]
+
+// Local copies of the few semconv keys we use: importing @opentelemetry/semantic-conventions
+// pulls ~340KB into the user's bundle and costs ~20ms+ of cold start.
+export const SemanticAttributes = {
+	DB_NAME: 'db.name',
+	DB_OPERATION: 'db.operation',
+	DB_STATEMENT: 'db.statement',
+	DB_SYSTEM: 'db.system',
+	EXCEPTION_MESSAGE: 'exception.message',
+	EXCEPTION_STACKTRACE: 'exception.stacktrace',
+	EXCEPTION_TYPE: 'exception.type',
+	FAAS_COLDSTART: 'faas.coldstart',
+	FAAS_TRIGGER: 'faas.trigger',
+} as const
+export const ATTR_FAAS_CRON = 'faas.cron'
+export const ATTR_FAAS_TIME = 'faas.time'
+export const ATTR_FAAS_TRIGGER = 'faas.trigger'
+export const FAAS_TRIGGER_VALUE_PUBSUB = 'pubsub'
+export const FAAS_TRIGGER_VALUE_TIMER = 'timer'
+export const ATTR_MESSAGING_DESTINATION_NAME = 'messaging.destination.name'
+export const ATTR_RPC_MESSAGE_ID = 'rpc.message.id'

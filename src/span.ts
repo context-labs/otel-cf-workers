@@ -20,7 +20,7 @@ import {
 } from '@opentelemetry/core'
 import { Resource } from '@opentelemetry/resources'
 import { ReadableSpan, TimedEvent } from '@opentelemetry/sdk-trace-base'
-import { SemanticAttributes } from '@opentelemetry/semantic-conventions'
+import { SemanticAttributes } from './constants'
 
 type OnSpanEnd = (span: Span) => void
 

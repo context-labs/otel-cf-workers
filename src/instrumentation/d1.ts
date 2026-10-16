@@ -1,5 +1,5 @@
 import { Attributes, SpanKind, SpanOptions, SpanStatusCode, Exception, trace } from '@opentelemetry/api'
-import { SemanticAttributes } from '@opentelemetry/semantic-conventions'
+import { SemanticAttributes } from '../constants'
 import { wrap } from '../wrap'
 import {
 	ATTR_CLOUDFLARE_BINDING_TYPE,

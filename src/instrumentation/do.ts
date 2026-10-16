@@ -1,5 +1,5 @@
 import { context as api_context, trace, SpanOptions, SpanKind, Exception, SpanStatusCode } from '@opentelemetry/api'
-import { SemanticAttributes } from '@opentelemetry/semantic-conventions'
+import { SemanticAttributes } from '../constants'
 import { passthroughGet, unwrap, wrap } from '../wrap'
 import {
 	getParentContextFromHeaders,
