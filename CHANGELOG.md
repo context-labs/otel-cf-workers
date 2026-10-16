@@ -1,5 +1,11 @@
 # @inference-net/otel-cf-workers
 
+## Unreleased
+
+### Patch Changes
+
+- Binding detection reads a fixed probe property name instead of a random one per call. V8 kept every distinct name read from a workerd binding, so each request retained ~14 KB until the isolate hit its 128 MB limit.
+
 ## 2.5.2
 
 ### Patch Changes
