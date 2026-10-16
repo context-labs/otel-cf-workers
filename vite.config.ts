@@ -18,9 +18,10 @@ export default defineConfig({
 		rollupOptions: {
 			external: (id) => {
 				if (id.startsWith('node:') || id.startsWith('cloudflare:')) return true
-				// Only the API peer dep stays external. Other OTel deps are bundled so their ESM builds
-				// get tree-shaken; consumers' bundlers resolve them to CJS and pull in everything.
-				if (id === '@opentelemetry/api' || id.startsWith('@opentelemetry/api/')) return true
+				// OTel deps (including @opentelemetry/api) are bundled so their ESM builds get tree-shaken:
+				// consumers' bundlers (wrangler/esbuild) resolve them to CJS and pull in everything, which
+				// dominated cold start. A user's own copy of @opentelemetry/api still interoperates via the
+				// API's global registry (Symbol.for('opentelemetry.js.api.1')).
 				// External test directory
 				if (id.includes('/test/') || id.includes('\\test\\')) return true
 				return false
