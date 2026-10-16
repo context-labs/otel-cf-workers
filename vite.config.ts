@@ -17,9 +17,10 @@ export default defineConfig({
 		},
 		rollupOptions: {
 			external: (id) => {
-				// External all node_modules dependencies
-				if (id.startsWith('node:')) return true
-				if (!id.startsWith('.') && !id.startsWith('/')) return true
+				if (id.startsWith('node:') || id.startsWith('cloudflare:')) return true
+				// Only the API peer dep stays external. Other OTel deps are bundled so their ESM builds
+				// get tree-shaken; consumers' bundlers resolve them to CJS and pull in everything.
+				if (id === '@opentelemetry/api' || id.startsWith('@opentelemetry/api/')) return true
 				// External test directory
 				if (id.includes('/test/') || id.includes('\\test\\')) return true
 				return false
@@ -27,7 +28,7 @@ export default defineConfig({
 		},
 		sourcemap: true,
 		target: 'esnext',
-		minify: false,
+		minify: true,
 	},
 	plugins: [
 		dts({

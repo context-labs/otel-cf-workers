@@ -1,9 +1,5 @@
 import { SpanKind, type SpanOptions } from '@opentelemetry/api'
-import {
-	ATTR_FAAS_TRIGGER,
-	ATTR_MESSAGING_DESTINATION_NAME,
-	ATTR_RPC_MESSAGE_ID,
-} from '@opentelemetry/semantic-conventions/incubating'
+import { ATTR_FAAS_TRIGGER, ATTR_MESSAGING_DESTINATION_NAME, ATTR_RPC_MESSAGE_ID } from '../constants'
 import { HandlerInstrumentation, OrPromise } from '../types'
 import { ATTR_CLOUDFLARE_EMAIL_FROM, ATTR_CLOUDFLARE_EMAIL_TO, ATTR_CLOUDFLARE_EMAIL_SIZE } from '../constants'
 
