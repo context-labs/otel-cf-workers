@@ -9,9 +9,12 @@ import { instrumentR2Bucket } from './r2'
 import { instrumentImagesBinding } from './images'
 import { instrumentRateLimitBinding } from './rate-limit'
 
+// A fixed name on purpose: V8 keeps every distinct property name read from a
+// workerd binding, so a random name per call grew the isolate ~14 KB per request.
+// A JS RPC stub still answers truthy for any name.
 const isJSRPC = (item?: unknown): item is Service => {
 	// @ts-expect-error The point of RPC types is to block non-existent properties, but that's the goal here
-	return !!(item as Service)?.['__some_property_that_will_never_exist' + Math.random()]
+	return !!(item as Service)?.['__some_property_that_will_never_exist']
 }
 
 const isKVNamespace = (item?: unknown): item is KVNamespace => {
